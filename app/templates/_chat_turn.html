@@ -1,0 +1,37 @@
+{# 一轮对话：用户气泡 + 助手气泡 + 依据/工具明细 #}
+<div class="turn">
+  <div class="bubble bubble-user">{{ turn.question }}</div>
+
+  <div class="bubble bubble-ai{% if turn.answer.error == 'llm_error' %} bubble-error{% endif %}">
+    <div class="bubble-text">{{ turn.answer.answer }}</div>
+
+    {% if turn.answer.error and turn.answer.error != 'llm_error' %}
+    <p class="bubble-note">{{ turn.answer.error }}</p>
+    {% endif %}
+
+    <div class="bubble-meta">
+      <span class="badge tone-info">{{ '模型模式' if turn.answer.mode == 'llm' else '规则模式' }}</span>
+      {% if turn.answer.citations %}
+      <span class="hint">依据：</span>
+      {% for c in turn.answer.citations %}
+      <a class="chip" href="/orders?q={{ c|urlencode }}">{{ c }}</a>
+      {% endfor %}
+      {% endif %}
+    </div>
+
+    {% if turn.answer.tools %}
+    <details class="chat-tools">
+      <summary>它查了什么（{{ turn.answer.tools|length }} 次工具调用）</summary>
+      <ul>
+        {% for trace in turn.answer.tools %}
+        <li>
+          <span class="mono">{{ trace.name }}</span>
+          {% if trace.arguments %}<span class="muted">{{ trace.arguments }}</span>{% endif %}
+          <span class="muted">{{ trace.summary.split('\n')[0] }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </div>
+</div>

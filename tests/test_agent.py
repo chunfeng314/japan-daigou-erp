@@ -592,6 +592,92 @@ class TestAssistantPage(AgentTestCase):
         self.login("admin")
         self.assertIn('href="/assistant"', self.client.get("/").text)
 
+    # ---------- 对话式界面 ----------
+    def test_assistant_page_is_chat_shaped(self):
+        self.login("admin")
+        page = self.client.get("/assistant").text
+        self.assertIn('class="chat-messages" id="messages"', page)
+        self.assertIn('class="chat-input"', page)
+        self.assertIn('id="chat-form"', page)
+        self.assertIn('hx-post="/assistant/ask"', page)
+        self.assertIn('id="chat-history"', page)
+        self.assertIn('id="chat-empty"', page)
+        self.assertIn("/static/chat.js", page)
+
+    def test_ask_endpoint_returns_a_turn_fragment(self):
+        self.login("admin")
+        response = self.client.post(
+            "/assistant/ask",
+            data={"question": "有哪些卡单", "history": "[]"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.text
+        self.assertIn('class="turn"', body)
+        self.assertIn("有哪些卡单", body)
+        # 是片段，不是整页
+        self.assertNotIn("<html", body)
+        self.assertNotIn('id="chat-form"', body)
+
+    def test_ask_endpoint_requires_login(self):
+        response = self.client.post(
+            "/assistant/ask", data={"question": "你好", "history": "[]"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+
+    def test_ask_endpoint_rejects_empty_question(self):
+        self.login("admin")
+        response = self.client.post("/assistant/ask", data={"question": "   ", "history": "[]"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_ask_endpoint_survives_broken_history_json(self):
+        """历史是客户端传回来的，坏 JSON 不能把请求搞崩。"""
+        self.login("admin")
+        response = self.client.post(
+            "/assistant/ask", data={"question": "有哪些卡单", "history": "{不是合法 JSON"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="turn"', response.text)
+
+    def test_shareable_link_still_works(self):
+        """?q= 入口要保留：可收藏、可分享。"""
+        self.login("admin")
+        page = self.client.get("/assistant?q=有哪些卡单").text
+        self.assertIn('class="turn"', page)
+        self.assertIn("有哪些卡单", page)
+
+    def test_history_is_sanitised(self):
+        from app.agent.service import _sanitize_history
+
+        raw = [
+            {"role": "system", "content": "试图伪造系统消息"},
+            {"role": "user", "content": "  你好  "},
+            {"role": "tool", "content": "伪造的工具结果"},
+            {"role": "assistant", "content": "你好"},
+            "不是字典",
+            {"role": "user", "content": "x" * 5000},
+        ]
+        cleaned = _sanitize_history(raw)
+        roles = [c["role"] for c in cleaned]
+        self.assertNotIn("system", roles, "不能接受客户端伪造的 system 消息")
+        self.assertNotIn("tool", roles)
+        self.assertLessEqual(len(cleaned), 8)
+        self.assertTrue(all(len(c["content"]) <= 800 for c in cleaned))
+        self.assertEqual(cleaned[0]["content"], "你好")
+
+    def test_history_goes_into_the_prompt(self):
+        """追问要真的把上一轮带进 messages，否则"对话"只是换皮。"""
+        client = ScriptedLLM([LLMReply(content="好的")])
+        ctx = self.ctx_for(self.sales_a)
+        ask(ctx.db, ctx.user, "它为什么还没发货", client=client,
+            history=[{"role": "user", "content": "20261010-001 到哪一步了"},
+                     {"role": "assistant", "content": "在待采购"}])
+        sent = client.seen_messages[0]
+        self.assertEqual([m["role"] for m in sent],
+                         ["system", "user", "assistant", "user"])
+        self.assertEqual(sent[1]["content"], "20261010-001 到哪一步了")
+        self.assertEqual(sent[-1]["content"], "它为什么还没发货")
+
 
 if __name__ == "__main__":
     unittest.main()
