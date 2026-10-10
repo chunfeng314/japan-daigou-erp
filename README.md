@@ -121,7 +121,24 @@ tests/              状态机 · 认证权限 · 订单与上传 · 状态推进
 | **规则模式** | 未配 `ERP_LLM_*`（默认） | 只认固定问法，不调用模型。开发文档 §9 自己也写了这类问题「规则引擎即可」——更快、不花额度、**不可能胡说** |
 | **模型模式** | 配了三个 `ERP_LLM_*` | 走 OpenAI 兼容协议，DeepSeek / 通义 / Kimi / 中转站通用，可自由提问 |
 
-当前已接 **DeepSeek**（`https://api.deepseek.com/v1` + `deepseek-chat`），配置在 `.env`（不进仓库）。
+当前已接 **DeepSeek**，配置在 `.env`（不进仓库）：
+
+```
+ERP_LLM_BASE_URL=https://api.deepseek.com/v1
+ERP_LLM_MODEL=deepseek-flash
+```
+
+**关于模型名（容易踩）**：DeepSeek 实际只开放两个模型（`GET /v1/models` 可查）：
+
+| 模型名 | 实测 | 说明 |
+|---|---|---|
+| `deepseek-flash` | 基础对话 1.1s / 工具调用正常 / 74 token | 快、便宜 —— **当前用的** |
+| `deepseek-v4-pro` | 基础对话 1.7s / 工具调用正常 / 123 token | 更强、更慢、更贵 |
+
+- ⚠️ **别写 `deepseek-chat` / `deepseek-reasoner`**：它们只是别名，都会被路由到 `deepseek-flash`，
+  这种隐式映射出了问题不好排查。
+- ⚠️ **DeepSeek 目前没有视觉模型**（点名 `deepseek-vl` 会被 400 拒绝），
+  所以「截图预填录单」要另配支持视觉的厂商（通义 qwen-vl / GPT-4o 等）。
 
 **实弹安全回归**（默认跳过，会花少量额度）：
 
