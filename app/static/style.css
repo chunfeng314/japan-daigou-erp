@@ -333,6 +333,15 @@ a { color: var(--primary); text-decoration: none; }
 .answer-citations { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
 .answer-card .op { margin-top: 14px; }
 
+/* ================= 截图识别预填 ================= */
+.extract-box {
+  border: 1px dashed #c7d7f0; border-radius: 10px; background: #f7faff;
+  padding: 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.extract-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.extract-title { font-weight: 500; }
+.ai-filled { background: #fffbe6 !important; border-color: #f0c36d !important; }
+
 /* ================= 每日简报 ================= */
 .briefing-headline { border-color: #f7cfa8; background: #fffdf9; }
 .headline-text { margin: 0 0 12px; font-size: 16px; line-height: 1.7; font-weight: 500; }

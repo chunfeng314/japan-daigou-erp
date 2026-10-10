@@ -190,6 +190,74 @@
     });
   }
 
+  /* ---------------- 3) 截图识别预填（P3） ---------------- */
+  var extractInput = document.getElementById('extract-input');
+  var extractStatus = document.getElementById('extract-status');
+
+  var FIELD_LABELS = {
+    platform: '平台', shop: '店铺', order_date: '下单日期', order_time: '下单时间',
+    product_desc: '商品需求', quantity: '数量', sale_amount: '销售金额', sale_currency: '币种'
+  };
+
+  function applyFields(fields) {
+    var done = [];
+    Object.keys(fields || {}).forEach(function (name) {
+      var el = document.querySelector('#order-form [name="' + name + '"]');
+      if (!el) return;
+      el.value = fields[name];
+      el.classList.add('ai-filled');
+      done.push(FIELD_LABELS[name] || name);
+    });
+    return done;
+  }
+
+  if (extractInput && extractStatus) {
+    extractInput.addEventListener('change', function () {
+      var file = extractInput.files && extractInput.files[0];
+      if (!file) return;
+      extractInput.value = '';
+
+      if (file.size > MAX_MB * 1024 * 1024) {
+        extractStatus.textContent = '图片超过 ' + MAX_MB + 'MB，请压缩后再传。';
+        return;
+      }
+
+      extractStatus.textContent = '正在识别截图…（大约几秒）';
+      var fd = new FormData();
+      fd.append('file', file);
+
+      fetch('/orders/extract', { method: 'POST', body: fd })
+        .then(function (r) {
+          return r.json()
+            .catch(function () { return {}; })
+            .then(function (body) { return { ok: r.ok, body: body }; });
+        })
+        .then(function (res) {
+          if (!res.ok || !res.body || !res.body.ok) {
+            extractStatus.textContent = '识别失败：' + ((res.body && res.body.error) || '未知错误') + '（可以手工填写）';
+            return;
+          }
+          var filled = applyFields(res.body.fields);
+          // 这张图同时就是订单截图，别让用户再选一次
+          uploaded.push({
+            key: res.body.key,
+            filename: res.body.filename,
+            preview: URL.createObjectURL(file)
+          });
+          renderShots();
+          syncHidden();
+          if (hintEl) hintEl.textContent = '已上传 ' + uploaded.length + ' 张';
+
+          extractStatus.textContent = filled.length
+            ? ('已按截图填好 ' + filled.length + ' 个字段：' + filled.join('、') + '。请核对后再提交。')
+            : '这张截图没识别出可用字段，请手工填写。';
+        })
+        .catch(function (e) {
+          extractStatus.textContent = '识别失败：' + e.message + '（可以手工填写）';
+        });
+    });
+  }
+
   if (hintEl && uploaded.length) {
     hintEl.textContent = '已上传 ' + uploaded.length + ' 张';
   }

@@ -10,11 +10,13 @@ import io
 import json
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from .. import config
+from ..agent.extract import extract_order_fields
 from ..db import get_db
 from ..deps import Forbidden, require_user
 from ..models import (
@@ -39,7 +41,7 @@ from ..permissions import (
 )
 from ..sla import stay_info, stay_map
 from ..state_machine import MAIN_FLOW, Role, Status
-from ..storage import get_storage
+from ..storage import StorageError, get_storage, normalize_ext
 from ..templating import templates
 from ..timeutil import format_display
 from ..transition_service import options_for
@@ -355,6 +357,52 @@ def export_orders(
         content=body,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 截图识别（P3）：上传截图 → 模型提取字段 → 返回给前端**预填**
+# 绝不在这里建单 —— 建单仍然走 /orders/new，照样过同一套校验。
+# --------------------------------------------------------------------------- #
+@router.post("/extract")
+async def extract_from_screenshot(
+    file: UploadFile = File(...),
+    user: User = Depends(require_user),
+):
+    if not can_create_order(user):
+        raise Forbidden("只有销售和管理员可以用截图识别")
+
+    raw = await file.read()
+    if not raw:
+        return JSONResponse({"ok": False, "error": "图片是空的"}, status_code=400)
+    if len(raw) > config.MAX_UPLOAD_BYTES:
+        return JSONResponse(
+            {"ok": False, "error": f"图片超过 {config.MAX_UPLOAD_BYTES // 1024 // 1024}MB 上限"},
+            status_code=400,
+        )
+
+    storage = get_storage()
+    try:
+        ext = normalize_ext(file.filename or ".png")
+        target = storage.prepare_direct_upload(f"x{ext}")
+    except StorageError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    result = extract_order_fields(raw, file.content_type or "")
+    if not result.ok:
+        return JSONResponse({"ok": False, "error": result.error}, status_code=400)
+
+    # 图仍然存下来 —— 它就是这单的订单截图，不浪费用户一次选择
+    storage.save_bytes(target.key, raw)
+    return JSONResponse(
+        {
+            "ok": True,
+            "key": target.key,
+            "filename": file.filename or "截图",
+            "fields": result.fields,
+            "filled": list(result.filled),
+            "error": result.error,
+        }
     )
 
 

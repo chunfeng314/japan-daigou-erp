@@ -12,6 +12,17 @@
 {% endif %}
 
 <form method="post" action="{{ form_action or '/orders/new' }}" class="panel form" id="order-form">
+  {% if not edit_order %}
+  <div class="extract-box">
+    <div class="extract-head">
+      <span class="extract-title">有订单截图？先传图，自动填表</span>
+      <span class="hint">识别结果只是<b>草稿</b>：AI 不会替你建单，请核对后再提交</span>
+    </div>
+    <input type="file" id="extract-input" accept="image/*">
+    <div id="extract-status" class="hint"></div>
+  </div>
+  {% endif %}
+
   <div class="grid-2">
     <label class="field">
       <span>平台</span>

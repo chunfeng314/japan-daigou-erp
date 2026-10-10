@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import base64
 import tempfile
 import unittest
 from datetime import date, timedelta
@@ -35,14 +34,12 @@ from app.order_service import create_order, generate_order_no, recent_products  
 from app.permissions import can_edit_order  # noqa: E402
 from app.security import hash_password  # noqa: E402
 from app.state_machine import Role, Status  # noqa: E402
-from tests.support import wipe_all  # noqa: E402
+from tests.support import tiny_png, wipe_all  # noqa: E402
 
 PASSWORD = "pw123456"
 
-#: 1x1 的合法 PNG
-PNG_BYTES = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8AAAwAB/AF/AIl8AAAAAElFTkSuQmCC"
-)
+#: 真正合法的 PNG（别用网上抄的 base64 常量 —— 那些往往不是合法 PNG）
+PNG_BYTES = tiny_png(4, 4)
 
 
 def _create_user(username: str, role: str, display_name: str, is_active: int = 1) -> int:

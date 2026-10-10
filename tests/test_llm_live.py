@@ -68,6 +68,13 @@ class LiveModelSecurityTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         reset_storage()
+        # ⚠️ 别的测试模块会把 config.LLM_* 清空（好让单元测试不联网），
+        # 而 config 是模块级单例，所以这里必须从真实环境把凭据读回来，
+        # 否则整套跑的时候实弹测试会被静默跳过。
+        config.LLM_BASE_URL = os.environ.get("ERP_LLM_BASE_URL", "")
+        config.LLM_API_KEY = os.environ.get("ERP_LLM_API_KEY", "")
+        config.LLM_MODEL = os.environ.get("ERP_LLM_MODEL", "")
+        reset_client()
 
     def setUp(self) -> None:
         reset_client()
@@ -132,6 +139,51 @@ class LiveModelSecurityTest(unittest.TestCase):
         self.assertTrue(answer.tools, "应该至少调用一次工具")
         self.assertIn(self.secret.order_no, answer.citations)
         self.assertIn(Status.PENDING_PURCHASE.value, answer.answer)
+
+
+#: 合成夹具（不是任何真实客户的截图）：メルカリ 订单卡，
+#  商品「【限定】香水 100ml 未開封 正規品」、数量 2、金額 ¥8,400、下单 2026-10-10 21:30
+ORDER_FIXTURE = Path(__file__).parent / "fixtures" / "order_screenshot.png"
+
+
+@unittest.skipUnless(LIVE, "实弹测试默认跳过；设 ERP_LLM_LIVE=1 开启")
+@unittest.skipUnless(is_configured(), "未配置 ERP_LLM_* 凭据")
+class LiveScreenshotExtractTest(unittest.TestCase):
+    """截图预填的实弹验证：喂一张**内容已知**的订单截图，看抽出来的字段对不对。"""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        config.LLM_BASE_URL = os.environ.get("ERP_LLM_BASE_URL", "")
+        config.LLM_API_KEY = os.environ.get("ERP_LLM_API_KEY", "")
+        config.LLM_MODEL = os.environ.get("ERP_LLM_MODEL", "")
+        reset_client()
+
+    def test_extract_from_known_screenshot(self):
+        from app.agent.extract import extract_order_fields
+
+        self.assertTrue(ORDER_FIXTURE.exists(), f"缺少夹具 {ORDER_FIXTURE}")
+        result = extract_order_fields(ORDER_FIXTURE.read_bytes(), "image/png")
+
+        self.assertTrue(result.ok, result.error)
+        fields = result.fields
+        self.assertEqual(fields.get("quantity"), 2, f"数量识别错：{fields}")
+        self.assertEqual(fields.get("sale_amount"), 8400.0, f"金额识别错：{fields}")
+        self.assertEqual(fields.get("order_date"), "2026-10-10", f"日期识别错：{fields}")
+        self.assertEqual(fields.get("order_time"), "21:30", f"时间识别错：{fields}")
+        self.assertEqual(fields.get("sale_currency"), "JPY", f"币种识别错：{fields}")
+        self.assertIn("香水", fields.get("product_desc", ""), f"商品名识别错：{fields}")
+        self.assertEqual(fields.get("shop"), "香水屋本舗", f"店铺识别错：{fields}")
+
+    def test_extraction_never_invents_missing_fields(self):
+        """空白图里什么都没有，模型就该一个字段都填不出来 —— 不许靠常识补。"""
+        from app.agent.extract import extract_order_fields
+        from tests.support import tiny_png
+
+        # ⚠️ 必须用真正的 PNG。之前用的是一个抄来的 base64 常量，其实不是合法 PNG，
+        # 本地存盘不解析所以看不出来，一送给模型就被 400 拒（unsupported image）。
+        result = extract_order_fields(tiny_png(8, 8), "image/png")
+        self.assertTrue(result.ok, result.error)
+        self.assertEqual(result.fields, {}, f"空白图不该识别出字段：{result.fields}")
 
 
 if __name__ == "__main__":
