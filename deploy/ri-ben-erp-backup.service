@@ -1,0 +1,23 @@
+[Unit]
+Description=日代 ERP 每日备份（SQLite 全库 + 截图清单）
+Documentation=file:/srv/ri-ben-erp/deploy/DEPLOY.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=erp
+Group=erp
+WorkingDirectory=/srv/ri-ben-erp
+EnvironmentFile=/srv/ri-ben-erp/.env
+
+ExecStart=/srv/ri-ben-erp/.venv/bin/python -m scripts.backup_db --keep-days 30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ri-ben-erp-backup
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/ri-ben-erp/backups

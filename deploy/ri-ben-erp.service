@@ -1,0 +1,47 @@
+[Unit]
+Description=日代 ERP（订单主线 + AI 助手）
+Documentation=file:/srv/ri-ben-erp/deploy/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=erp
+Group=erp
+WorkingDirectory=/srv/ri-ben-erp
+
+# 所有配置都在这个文件里（见 deploy/env.production.example）
+EnvironmentFile=/srv/ri-ben-erp/.env
+
+# 只监听回环 —— 公网流量一律经 Caddy 反代，不直接暴露 uvicorn
+ExecStart=/srv/ri-ben-erp/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 --port 8000 \
+    --proxy-headers --forwarded-allow-ips 127.0.0.1
+
+# ⚠️ 刻意只用 1 个 worker：数据库是 SQLite，多进程写同一库容易撞锁。
+# 10 人 / 月 2000 单规模，单进程绰绰有余；将来换 MySQL 再考虑加 worker。
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGINT
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ri-ben-erp
+
+# ---- 收口（最小权限）----
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# 只有这几处可写
+ReadWritePaths=/srv/ri-ben-erp/data /srv/ri-ben-erp/backups
+
+[Install]
+WantedBy=multi-user.target

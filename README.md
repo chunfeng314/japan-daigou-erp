@@ -75,8 +75,27 @@ app/
   templates/        base / login / home / order_list / order_new / order_detail / users / forbidden
   static/           style.css · orders.js（历史下拉 + 截图上传）· htmx.min.js
 scripts/init_db.py  建表 + 首次创建管理员
-tests/              状态机 · 认证权限 · 订单与上传 · 状态推进与异常（共 130 项）
+scripts/backup_db.py  每日备份：SQLite 一致性快照 + 截图清单 + 轮转（本地存储时连图片一起打包）
+scripts/preflight.py  上线自检：把「配置错了但看着正常」的问题提前揪出来
+deploy/              部署材料：systemd unit + timer · Caddyfile · 生产 .env 模板 · **DEPLOY.md 上线手册**
+tests/               状态机 · 认证权限 · 订单与上传 · 状态推进与异常 · 定时任务 · 助手 · 运维脚本（共 286 项）
 ```
+
+### 部署
+
+看 **[`deploy/DEPLOY.md`](deploy/DEPLOY.md)** —— 从「先测国内→东京延迟」到 systemd、Caddy、
+备份定时器、上线自检、交付清单，一条龙。
+
+两个脚本可以**先在本地跑一遍**（不依赖服务器）：
+
+```bash
+.venv/bin/python -m scripts.preflight     # 自检：密钥强度/cookie Secure/存储/模型/库完整性/磁盘
+.venv/bin/python -m scripts.backup_db     # 备份：产出 backups/erp-*.sqlite3 + 清单 + 轮转
+```
+
+> 备份用 SQLite 官方**在线备份 API**，不是 `cp` —— 库开了 WAL，直接拷可能拿到
+> 「新数据还在 WAL 里」的半截状态，**恢复时才发现少了最近的单**。
+> 已做过恢复演练：从备份还原后账号/订单/截图/流转记录数与线上**完全一致**。
 
 ### 截图存储怎么切到 COS
 

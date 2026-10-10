@@ -1,0 +1,42 @@
+# 日代 ERP 反向代理 + 自动 HTTPS
+#
+# 用法：
+#   1) 把下面的域名换成你的真实域名
+#   2) cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   3) systemctl reload caddy
+#
+# HTTPS 证书由 Caddy 自动申请续期（Let's Encrypt）。
+# 前提：域名 A 记录已指向这台东京服务器，且 80/443 端口对公网开放。
+# ⚠️ 国内访问走 HTTPS 时，证书签发需要海外 CA 能回调到 80 端口 ——
+#    如果这步卡住，看 DEPLOY.md 的排查段。
+
+erp.example.com {
+	encode gzip
+
+	# 截图可能几 MB 一张，默认限制太紧会 413
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy 127.0.0.1:8000 {
+		# uvicorn 那边开了 --proxy-headers，这里如实透传
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy same-origin
+		# 站点本身不发外链、不引外部 CDN（htmx 是本地文件），所以可以收紧
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/ri-ben-erp.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+		format json
+	}
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=日代 ERP 每日备份触发（凌晨 3:30）
+
+[Timer]
+# ⚠️ 时区取决于服务器的 TZ。开跑前先确认：
+#     timedatectl                       # 看 Time zone
+#     systemctl list-timers ri-ben-erp-backup.timer   # 看下一次触发时间
+# 业务在国内、服务器在东京 —— 建议把服务器 TZ 设成 Asia/Shanghai，
+# 这样"凌晨 3:30"是大家理解的凌晨 3:30（日本时间 4:30，避开了业务高峰）。
+OnCalendar=*-*-* 03:30:00
+# 机器重启/关机错过的备份，开机后补跑一次
+Persistent=true
+# 加一点随机延迟，避免和其他定时任务挤在一起
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
