@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}首页 · {{ app_title }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title">你好，{{ user.display_name }}</h1>
+<p class="page-sub">你的角色是 <span class="badge role-{{ user.role }}">{{ user.role_label }}</span>，下面是你现在要盯的事。</p>
+
+<section class="todos">
+  {% for todo in todos %}
+  <div class="todo-card">
+    <div class="todo-head">
+      <span class="todo-title">{{ todo.title }}</span>
+      <span class="todo-count">{{ todo.count }}</span>
+    </div>
+    {% if todo.hint %}<p class="todo-hint">{{ todo.hint }}</p>{% endif %}
+    {% if todo.status_filter %}<p class="todo-hint muted">对应状态：{{ todo.status_filter }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<section class="panel">
+  <h2 class="panel-title">订单全景 <span class="muted">（共 {{ total_orders }} 单）</span></h2>
+  <div class="flow">
+    {% for status, count in status_counts %}
+    <div class="flow-step{% if count %} flow-step-active{% endif %}">
+      <span class="flow-name">{{ status }}</span>
+      <span class="flow-count">{{ count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="notice">
+  本期（D1）已交付：数据模型、状态机、登录与账号管理。订单录入/采购/收货/带货/发货/结算/异常追踪将在后续排期逐步上线。
+</div>
+{% endblock %}

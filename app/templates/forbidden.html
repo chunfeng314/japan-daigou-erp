@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}无权访问 · {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <h1 class="page-title">无权访问</h1>
+  <p class="page-sub">{{ message }}</p>
+  <a class="btn btn-primary" href="/">回到首页</a>
+</div>
+{% endblock %}

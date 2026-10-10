@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}登录 · {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="login-card">
+  <h1 class="login-title">{{ app_title }}</h1>
+  <p class="login-sub">中国代购发日本 · 订单主线</p>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/login" class="form">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label class="field">
+      <span>账号</span>
+      <input type="text" name="username" autocomplete="username" required autofocus>
+    </label>
+    <label class="field">
+      <span>密码</span>
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="btn btn-primary btn-block">登录</button>
+  </form>
+</div>
+{% endblock %}

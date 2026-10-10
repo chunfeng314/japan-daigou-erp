@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}账号管理 · {{ app_title }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title">账号管理</h1>
+<p class="page-sub">停用后账号无法登录，但该账号的历史数据完整保留。</p>
+
+{% if msg %}<div class="alert alert-ok">{{ msg }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <h2 class="panel-title">新增账号</h2>
+  <form method="post" action="/admin/users" class="form form-inline">
+    <label class="field">
+      <span>账号</span>
+      <input type="text" name="username" required placeholder="登录名，如 li">
+    </label>
+    <label class="field">
+      <span>姓名</span>
+      <input type="text" name="display_name" required placeholder="显示名，如 李四">
+    </label>
+    <label class="field">
+      <span>角色</span>
+      <select name="role" required>
+        {% for value, label in roles %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field">
+      <span>初始密码</span>
+      <input type="text" name="password" required minlength="6" placeholder="至少 6 位">
+    </label>
+    <button type="submit" class="btn btn-primary">新增</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2 class="panel-title">全部账号 <span class="muted">（{{ users|length }} 个）</span></h2>
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>姓名</th><th>账号</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in users %}
+        <tr class="{% if not u.is_active %}row-off{% endif %}">
+          <td>{{ u.display_name }}</td>
+          <td class="mono">{{ u.username }}</td>
+          <td><span class="badge role-{{ u.role }}">{{ u.role_label }}</span></td>
+          <td>{% if u.is_active %}<span class="tag tag-on">启用</span>{% else %}<span class="tag tag-off">已停用</span>{% endif %}</td>
+          <td class="muted">{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="ops">
+            <form method="post" action="/admin/users/{{ u.id }}/toggle" class="inline-form">
+              <button type="submit" class="btn btn-small">{% if u.is_active %}停用{% else %}启用{% endif %}</button>
+            </form>
+            <form method="post" action="/admin/users/{{ u.id }}/reset-password" class="inline-form">
+              <input type="text" name="new_password" placeholder="新密码" minlength="6" class="input-small">
+              <button type="submit" class="btn btn-small">重置密码</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

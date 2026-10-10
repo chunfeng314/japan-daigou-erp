@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_title }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+{% if user %}
+<header class="topbar">
+  <a class="brand" href="/">{{ app_title }}</a>
+  <nav class="nav">
+    <a href="/">首页</a>
+    {% if user.role == Role.ADMIN.value %}<a href="/admin/users">账号管理</a>{% endif %}
+  </nav>
+  <div class="who">
+    <span class="who-name">{{ user.display_name }}</span>
+    <span class="badge role-{{ user.role }}">{{ user.role_label }}</span>
+    <form method="post" action="/logout"><button type="submit" class="btn-plain">退出</button></form>
+  </div>
+</header>
+{% endif %}
+
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="foot">{{ app_title }} · v{{ app_version }}</footer>
+</body>
+</html>
