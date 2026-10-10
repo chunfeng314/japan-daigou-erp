@@ -314,6 +314,25 @@ a { color: var(--primary); text-decoration: none; }
 .filters[open] > summary::before { content: "▾"; }
 .filters[open] > summary { margin-bottom: 14px; }
 
+.assistant-form .form-actions { padding-top: 0; }
+.samples { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.chip {
+  display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: #fafbfc; color: var(--text); font-size: 13px;
+}
+.chip:hover { border-color: var(--primary); color: var(--primary); }
+.assistant-mode { margin-bottom: 16px; }
+.assistant-mode code { background: #eef1f5; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+.answer-card { border-color: #cddffb; }
+.answer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.answer-text {
+  margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: inherit; font-size: 15px; line-height: 1.75; color: var(--text);
+}
+.answer-citations { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.answer-card .op { margin-top: 14px; }
+
 /* ==========================================================================
    手机端适配
    —— 放在文件最后，确保能覆盖上面的桌面规则（同权重时后者胜）
@@ -338,6 +357,7 @@ a { color: var(--primary); text-decoration: none; }
   /* 注意：不要在这里再覆盖 .btn-small 的高度 —— 它的元素同时带 .btn，
      覆盖会把触摸目标压回 36px（这坑踩过一次） */
   .input-small { min-height: 40px; }
+  .chip { min-height: 40px; padding: 8px 14px; }
 
   /* ---- 输入框 16px：低于这个值 iOS 聚焦时会自动放大页面 ---- */
   .field input, .field select, .field textarea { font-size: 16px; }

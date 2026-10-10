@@ -42,6 +42,18 @@ COOKIE_SECURE: bool = os.environ.get("ERP_COOKIE_SECURE", "0").lower() in {"1", 
 #: 展示时区。库里存 UTC，界面/导出都按这个时区显示（团队在国内，默认东八区）
 DISPLAY_TZ: str = os.environ.get("ERP_DISPLAY_TZ", "Asia/Shanghai")
 
+# --------------------------------------------------------------------------- #
+# AI 管家（二期）。走 OpenAI 兼容协议（/chat/completions + tools），
+# DeepSeek / 通义 / Kimi / 各类中转站都能直接接，只改这三个变量即可。
+# 三个都不填 → 自动降级为「规则模式」（不调用任何模型，本地解析常见问句）。
+# --------------------------------------------------------------------------- #
+LLM_BASE_URL: str = os.environ.get("ERP_LLM_BASE_URL", "").rstrip("/")
+LLM_API_KEY: str = os.environ.get("ERP_LLM_API_KEY", "")
+LLM_MODEL: str = os.environ.get("ERP_LLM_MODEL", "")
+LLM_TIMEOUT: int = int(os.environ.get("ERP_LLM_TIMEOUT", "30"))
+#: 一次提问最多来回几轮工具调用（防止模型陷进循环把额度烧光）
+LLM_MAX_ROUNDS: int = int(os.environ.get("ERP_LLM_MAX_ROUNDS", "4"))
+
 ADMIN_USERNAME: str = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD: str = os.environ.get("ADMIN_PASSWORD", "")
 ADMIN_DISPLAY_NAME: str = os.environ.get("ADMIN_DISPLAY_NAME", "系统管理员")

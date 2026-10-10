@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}助手 · {{ app_title }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title">助手</h1>
+<p class="page-sub">
+  用大白话查订单。助手<b>只能看你权限内的单</b> —— 就算它是模型，也没法绕过权限。
+</p>
+
+<div class="notice assistant-mode">
+  {% if llm_configured %}
+  当前是<b>模型模式</b>：可以自由提问。
+  {% else %}
+  当前是<b>规则模式</b>（未配置模型凭据）：只认下面示例里的固定问法，
+  不会瞎猜。配好 <code>ERP_LLM_BASE_URL</code> / <code>ERP_LLM_API_KEY</code> / <code>ERP_LLM_MODEL</code> 后自动切换。
+  {% endif %}
+</div>
+
+<form method="get" action="/assistant" class="panel assistant-form">
+  <label class="field">
+    <span>你想问什么</span>
+    <input type="text" name="q" value="{{ q }}" placeholder="例如：20261010-001 到哪一步了"
+           autocomplete="off" autofocus>
+  </label>
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">问一下</button>
+    {% if q %}<a class="btn" href="/assistant">清空</a>{% endif %}
+  </div>
+  <div class="samples">
+    <span class="hint">试试：</span>
+    {% for sample in samples %}
+    <a class="chip" href="/assistant?q={{ sample|urlencode }}">{{ sample }}</a>
+    {% endfor %}
+  </div>
+</form>
+
+{% if answer %}
+{% if answer.error == 'llm_error' %}
+<div class="alert alert-error">{{ answer.answer }}</div>
+{% else %}
+<section class="panel answer-card">
+  <div class="answer-head">
+    <span class="badge tone-info">{{ '模型模式' if answer.mode == 'llm' else '规则模式' }}</span>
+    {% if answer.error %}<span class="flag-over">注意：{{ answer.error }}</span>{% endif %}
+  </div>
+  <pre class="answer-text">{{ answer.answer }}</pre>
+
+  {% if answer.citations %}
+  <div class="answer-citations">
+    <span class="hint">依据（可点开核对）：</span>
+    {% for c in answer.citations %}
+    <a class="chip" href="/orders?q={{ c|urlencode }}">{{ c }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if answer.tools %}
+  <details class="op">
+    <summary><span class="op-label">它查了什么（共 {{ answer.tools|length }} 次工具调用）</span></summary>
+    <div class="table-scroll">
+      <table class="table table-cards">
+        <thead><tr><th>工具</th><th>参数</th><th>结果</th></tr></thead>
+        <tbody>
+        {% for trace in answer.tools %}
+          <tr>
+            <td class="mono cell-primary">{{ trace.name }}</td>
+            <td class="mono" data-label="参数">{{ trace.arguments }}</td>
+            <td data-label="结果" class="cell-desc">{{ trace.summary }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+{% endif %}
+
+<div class="notice">
+  助手是<b>只读</b>的：它不会替你改任何数据。要推进订单状态，请到订单详情页操作。
+</div>
+{% endblock %}
