@@ -7,6 +7,7 @@
 
 <div class="head-actions quick-actions">
   <a class="btn btn-primary" href="/orders">全部订单</a>
+  <a class="btn" href="/briefing">今日日报</a>
   <a class="btn" href="/assistant">问助手</a>
   {% if user.role in [Role.SALES.value, Role.ADMIN.value] %}
   <a class="btn" href="/orders/new">+ 录入订单</a>

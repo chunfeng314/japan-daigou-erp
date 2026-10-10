@@ -333,6 +333,23 @@ a { color: var(--primary); text-decoration: none; }
 .answer-citations { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
 .answer-card .op { margin-top: 14px; }
 
+/* ================= 每日简报 ================= */
+.briefing-headline { border-color: #f7cfa8; background: #fffdf9; }
+.headline-text { margin: 0 0 12px; font-size: 16px; line-height: 1.7; font-weight: 500; }
+.briefing-text {
+  width: 100%; margin-top: 12px; padding: 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: #fafbfc; color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px; line-height: 1.7; white-space: pre; overflow-x: auto;
+}
+.brief-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.brief-item {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fcfcfd;
+}
+.brief-over { border-color: #f7cfa8; background: #fffaf5; }
+.brief-product { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ==========================================================================
    手机端适配
    —— 放在文件最后，确保能覆盖上面的桌面规则（同权重时后者胜）

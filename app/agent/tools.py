@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from ..models import Order, User
 from ..permissions import visibility_filter
 from ..sla import stay_map
-from ..state_machine import Status, next_status, transitions_from
+from ..state_machine import Status, next_step
 from ..todo_service import overdue_for_user, todos_for
 
 MAX_LIMIT = 50
@@ -68,14 +68,8 @@ def _order_no_variants(raw: str) -> list[str]:
 
 
 def _next_step(status: Status) -> tuple[Status | None, tuple[str, ...]]:
-    """主线上的下一步 + 该谁做（用于回答"现在轮到谁"）。"""
-    nxt = next_status(status)
-    if nxt is None:
-        return None, ()
-    for transition in transitions_from(status):
-        if transition.dst == nxt:
-            return nxt, transition.role_labels
-    return nxt, ()
+    """主线上的下一步 + 该谁做（统一实现见 state_machine.next_step）。"""
+    return next_step(status)
 
 
 def _visible_orders_stmt(ctx: AgentContext):

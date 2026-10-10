@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}日报 · {{ app_title }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">日报</h1>
+    <p class="page-sub">
+      {{ briefing.generated_at | dt }} · 范围：{{ briefing.scope }}
+    </p>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn btn-primary" id="copy-briefing">复制日报</button>
+  </div>
+</div>
+
+<section class="panel briefing-headline">
+  <p class="headline-text">{{ briefing.headline }}</p>
+  <details class="op">
+    <summary><span class="op-label">纯文本版（复制粘贴到群里用）</span></summary>
+    <textarea id="briefing-text" class="briefing-text" rows="14" readonly>{{ briefing.text }}</textarea>
+  </details>
+</section>
+
+{% for section in briefing.sections %}
+<section class="panel">
+  <h2 class="panel-title">
+    {{ section.title }}
+    <span class="badge tone-{{ 'warn' if section.total and section.title == '卡住了' else 'todo' }}">{{ section.total }} 单</span>
+  </h2>
+  {% if section.items %}
+  <ul class="brief-list">
+    {% for item in section.items %}
+    <li class="brief-item{% if item.overdue %} brief-over{% endif %}">
+      <a class="mono" href="/orders?q={{ item.order_no|urlencode }}">{{ item.order_no }}</a>
+      <span class="brief-product">{{ item.product }}</span>
+      <span class="badge tone-{{ STATUS_TONES.get(item.status, 'todo') }}">{{ item.status }}</span>
+      {% if item.overdue %}
+      <span class="flag-over">已停留 {{ item.stay_label }}</span>
+      {% elif item.days is not none %}
+      <span class="muted">停留 {{ item.stay_label }}</span>
+      {% endif %}
+      {% if item.roles %}<span class="muted">等：{{ item.roles|join('、') }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if section.total > section.items|length %}
+  <p class="hint">
+    还有 {{ section.total - section.items|length }} 单没列出，<a href="/orders">去看完整列表</a>。
+  </p>
+  {% endif %}
+  {% else %}
+  <p class="muted">无。</p>
+  {% endif %}
+  {% if section.hint %}<p class="hint">{{ section.hint }}</p>{% endif %}
+</section>
+{% endfor %}
+
+<section class="panel">
+  <h2 class="panel-title">各状态堆积 <span class="muted">（只统计你能看到的单）</span></h2>
+  <div class="flow">
+    {% for name, count in briefing.status_counts %}
+    <div class="flow-step{% if count %} flow-step-active{% endif %}">
+      <span class="flow-name">{{ name }}</span>
+      <span class="flow-count">{{ count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="notice">
+  日报由<b>规则引擎</b>生成，每个数字都能溯源到具体订单 —— 不经过模型改写，不会编。
+  系统不做推送（文档 §1 明确不做），需要转发时点上面的「复制日报」。
+</div>
+
+<script src="/static/briefing.js" defer></script>
+{% endblock %}

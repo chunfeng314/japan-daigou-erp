@@ -244,6 +244,19 @@ def find_transition(src: Status, dst: Status) -> Transition | None:
     return None
 
 
+def next_step(status: Status) -> tuple[Status | None, tuple[str, ...]]:
+    """主线上的下一步 + **该由哪些角色接手**。
+
+    用于回答「轮到谁了」—— 订单详情、AI 助手、每日简报都要这个，
+    所以放在状态机里做唯一实现。
+    """
+    nxt = next_status(status)
+    if nxt is None:
+        return None, ()
+    transition = find_transition(status, nxt)
+    return nxt, (transition.role_labels if transition else ())
+
+
 def allowed_transitions(status: Status, role: Role, *, is_owner: bool = False) -> tuple[Transition, ...]:
     """给定"当前状态 + 操作人角色"，返回他推得动的流转（供页面渲染按钮）。"""
     result: list[Transition] = []
