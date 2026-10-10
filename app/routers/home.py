@@ -1,7 +1,9 @@
 """首页：按角色显示各自待办 + 概览。
 
-D1 阶段订单模块尚未上线，但这里的统计**是真的在查库**——等 D2 录入订单后
-数字会自动亮起来，不需要改这一层。
+待办分两类：
+- **按状态数**：这一步该谁做，就出现在谁首页上；
+- **卡单提醒**：停留时间超过各状态合理天数（阈值见 `app/sla.py`），
+  统计范围受该角色的可见性约束 —— 采购不会看到销售的卡单。
 """
 
 from __future__ import annotations
@@ -15,6 +17,8 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import require_user
 from ..models import Order, User
+from ..permissions import visibility_filter
+from ..sla import overdue_count
 from ..state_machine import MAIN_FLOW, Role, Status
 from ..templating import templates
 
@@ -38,6 +42,13 @@ def _count(db: Session, *conditions) -> int:
     return int(db.scalar(stmt) or 0)
 
 
+def _overdue(db: Session, user: User) -> int:
+    """当前用户**可见范围内**、已超出状态合理停留时间的单数。"""
+    visibility = visibility_filter(user)
+    conditions = [visibility] if visibility is not None else []
+    return overdue_count(db, conditions)
+
+
 def _status_counts(db: Session) -> list[tuple[str, int]]:
     rows = db.execute(select(Order.status, func.count()).group_by(Order.status)).all()
     found = {status: count for status, count in rows}
@@ -46,6 +57,7 @@ def _status_counts(db: Session) -> list[tuple[str, int]]:
 
 def _todos_for(db: Session, user: User) -> list[Todo]:
     mine = Order.salesperson_id == user.id
+    overdue = _overdue(db, user)
 
     if user.role == Role.SALES.value:
         return [
@@ -60,6 +72,7 @@ def _todos_for(db: Session, user: User) -> list[Todo]:
                 _count(db, mine, Order.status.notin_(_TERMINAL)),
                 "我名下所有未结束的订单",
             ),
+            Todo("卡单提醒", overdue, "停留时间超过该状态合理天数的单"),
             Todo(
                 "我的异常未了结",
                 _count(db, mine, Order.has_exception == 1),
@@ -81,6 +94,13 @@ def _todos_for(db: Session, user: User) -> list[Todo]:
                 "你正在处理的单",
                 Status.PURCHASING.value,
             ),
+            Todo(
+                "待上海收货",
+                _count(db, Order.status == Status.WAITING_SH_RECEIPT.value),
+                "货已寄出，盯一下到没到上海",
+                Status.WAITING_SH_RECEIPT.value,
+            ),
+            Todo("卡单提醒", overdue, "停留时间超过该状态合理天数的单"),
         ]
 
     if user.role == Role.WAREHOUSE.value:
@@ -103,25 +123,27 @@ def _todos_for(db: Session, user: User) -> list[Todo]:
                 "已安排带货，等登记发货给买家",
                 Status.HANDCARRY_ARRANGED.value,
             ),
+            Todo("卡单提醒", overdue, "停留时间超过该状态合理天数的单"),
         ]
 
-    # 管理员：全部 + 异常汇总
+    # 管理员：全部 + 超时提醒 + 异常汇总
     return [
         Todo(
             "全部进行中",
             _count(db, Order.status.notin_(_TERMINAL)),
             "所有未结束的订单",
         ),
+        Todo("卡单提醒", overdue, "停留时间超过该状态合理天数的单，最需要插手"),
+        Todo(
+            "异常未了结",
+            _count(db, Order.has_exception == 1),
+            "少货 / 错货等待处理，列表里带红色角标",
+        ),
         Todo(
             "待上海收货",
             _count(db, Order.status == Status.WAITING_SH_RECEIPT.value),
             "最容易卡住的一环",
             Status.WAITING_SH_RECEIPT.value,
-        ),
-        Todo(
-            "异常未了结",
-            _count(db, Order.has_exception == 1),
-            "少货 / 错货等待处理，列表里带红色角标",
         ),
     ]
 

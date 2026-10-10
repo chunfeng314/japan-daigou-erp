@@ -188,6 +188,11 @@ a { color: var(--primary); text-decoration: none; }
   display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px;
   font-size: 11px; background: #fdecea; color: var(--danger); border: 1px solid #f5c6c2;
 }
+.flag-over {
+  display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 4px;
+  font-size: 11px; background: #fff1e6; color: #c2410c; border: 1px solid #f7cfa8;
+}
+.stay-over { color: #c2410c; font-weight: 600; white-space: nowrap; }
 
 /* 状态色调 */
 .badge.tone-todo { background: #f1f2f4; color: #4b5563; border-color: #dfe3e8; }

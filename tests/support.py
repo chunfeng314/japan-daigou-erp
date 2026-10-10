@@ -7,9 +7,11 @@
 
 from __future__ import annotations
 
+import atexit
+
 from sqlalchemy import delete
 
-from app.db import get_sessionmaker
+from app.db import get_sessionmaker, reset_state
 from app.models import (
     JpDelivery,
     JpShipment,
@@ -48,3 +50,8 @@ def wipe_all() -> None:
         session.commit()
     finally:
         session.close()
+
+
+# 进程退出时把引擎回收掉，否则 CPython 的 sqlite3 会报
+# "ResourceWarning: unclosed database"（只是测试输出噪音，生产无影响）
+atexit.register(reset_state)

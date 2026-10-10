@@ -12,9 +12,14 @@
       {% if user.role == Role.WAREHOUSE.value and not filters.q %}（默认只显示待处理的；输入单号/快递单号可查全库）{% endif %}
     </p>
   </div>
-  {% if can_create %}
-  <a class="btn btn-primary" href="/orders/new">+ 录入订单</a>
-  {% endif %}
+  <div class="head-actions">
+    {% if can_export %}
+    <a class="btn" href="/orders/export.csv?status={{ filters.status|urlencode }}&q={{ filters.q|urlencode }}&owner={{ filters.owner|urlencode }}&date_from={{ filters.date_from|urlencode }}&date_to={{ filters.date_to|urlencode }}">导出 CSV</a>
+    {% endif %}
+    {% if can_create %}
+    <a class="btn btn-primary" href="/orders/new">+ 录入订单</a>
+    {% endif %}
+  </div>
 </div>
 
 <form method="get" action="/orders" class="panel filter-form">
@@ -64,11 +69,12 @@
       <thead>
         <tr>
           <th>订单号</th><th>商品</th><th>状态</th><th>销售</th>
-          <th class="num">数量</th><th class="num">销售金额</th><th>下单日期</th>
+          <th class="num">数量</th><th class="num">销售金额</th><th>下单日期</th><th>停留</th>
         </tr>
       </thead>
       <tbody>
       {% for o in orders %}
+        {% set stay = stays.get(o.id) %}
         <tr>
           <td class="mono">
             <a href="/orders/{{ o.id }}">{{ o.order_no }}</a>
@@ -80,6 +86,9 @@
           <td class="num">{{ o.quantity }}</td>
           <td class="num">{{ '{:,.0f}'.format(o.sale_amount) }} {{ o.sale_currency }}</td>
           <td class="muted">{{ o.order_date }}{% if o.order_time %} {{ o.order_time }}{% endif %}</td>
+          <td class="{% if stay and stay.overdue %}stay-over{% else %}muted{% endif %}">
+            {{ stay.label if stay else '—' }}{% if stay and stay.overdue %} <span class="flag-over">超时</span>{% endif %}
+          </td>
         </tr>
       {% endfor %}
       </tbody>

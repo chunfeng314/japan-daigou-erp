@@ -12,7 +12,13 @@
       <span class="badge tone-{{ STATUS_TONES.get(order.status, 'todo') }}">{{ order.status }}</span>
       {% if order.has_exception %}<span class="flag-ex">有异常</span>{% endif %}
     </h1>
-    <p class="page-sub">销售：{{ salesperson.display_name if salesperson else '—' }} · 创建于 {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    <p class="page-sub">
+      销售：{{ salesperson.display_name if salesperson else '—' }} · 创建于 {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}
+      {% if stay and stay.days is not none %}
+      · 当前状态停留 <b class="{% if stay.overdue %}danger-text{% endif %}">{{ stay.label }}</b>
+      {% if stay.overdue %}<span class="flag-over">超时</span>{% endif %}
+      {% endif %}
+    </p>
   </div>
   <div class="head-actions">
     {% if can_edit %}<a class="btn btn-primary" href="/orders/{{ order.id }}/edit">编辑</a>{% endif %}

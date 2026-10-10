@@ -84,3 +84,12 @@ def can_edit_order(user: User, order: Order) -> bool:
 
 def can_create_order(user: User) -> bool:
     return user.role in {Role.SALES.value, Role.ADMIN.value}
+
+
+def can_export_orders(user: User) -> bool:
+    """文档 §2.3 的数据导出一行：销售导自己的、管理员导全部。
+
+    采购 / 上海仓没有导出权限 —— 导出范围仍受 `visibility_filter` 约束，
+    所以销售即使导也只是导自己的那部分。
+    """
+    return user.role in {Role.SALES.value, Role.ADMIN.value}

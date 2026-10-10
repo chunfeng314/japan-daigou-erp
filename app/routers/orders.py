@@ -5,11 +5,13 @@ D2~3 范围：销售录入与查看。状态推进（采购/收货/带货/发货
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -28,7 +30,14 @@ from ..models import (
     ShReceive,
 )
 from ..order_service import create_order, recent_products
-from ..permissions import can_create_order, can_edit_order, can_view_order, visibility_filter
+from ..permissions import (
+    can_create_order,
+    can_edit_order,
+    can_export_orders,
+    can_view_order,
+    visibility_filter,
+)
+from ..sla import stay_info, stay_map
 from ..state_machine import MAIN_FLOW, Role, Status
 from ..storage import get_storage
 from ..templating import templates
@@ -168,26 +177,21 @@ def product_history(
     return {"items": [{"desc": r.product_desc, "use_count": r.use_count} for r in rows]}
 
 
-# --------------------------------------------------------------------------- #
-# 列表
-# --------------------------------------------------------------------------- #
-@router.get("")
-def order_list(
-    request: Request,
-    status: str = Query(""),
-    q: str = Query(""),
-    owner: str = Query(""),
-    date_from: str = Query(""),
-    date_to: str = Query(""),
-    page: int = Query(1, ge=1),
-    user: User = Depends(require_user),
-    db: Session = Depends(get_db),
-):
+def _build_conditions(
+    user: User,
+    *,
+    status: str = "",
+    q: str = "",
+    owner: str = "",
+    date_from: str = "",
+    date_to: str = "",
+) -> tuple[list, bool]:
+    """列表与导出共用的筛选条件。返回（条件列表, 是否为"上海仓搜索全库"模式）。"""
     keyword = q.strip()
     # 上海仓平时只看待处理的单，但只要用了搜索，就允许查全库（文档：按单号/快递单查询）
     warehouse_search = bool(keyword) and user.role == Role.WAREHOUSE.value
 
-    conditions = []
+    conditions: list = []
     visibility = visibility_filter(user, warehouse_search=warehouse_search)
     if visibility is not None:
         conditions.append(visibility)
@@ -212,6 +216,28 @@ def order_list(
         conditions.append(Order.order_date >= start)
     if end:
         conditions.append(Order.order_date <= end)
+
+    return conditions, warehouse_search
+
+
+# --------------------------------------------------------------------------- #
+# 列表
+# --------------------------------------------------------------------------- #
+@router.get("")
+def order_list(
+    request: Request,
+    status: str = Query(""),
+    q: str = Query(""),
+    owner: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    page: int = Query(1, ge=1),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    conditions, _ = _build_conditions(
+        user, status=status, q=q, owner=owner, date_from=date_from, date_to=date_to
+    )
 
     count_stmt = select(func.count()).select_from(Order)
     for condition in conditions:
@@ -243,6 +269,7 @@ def order_list(
         {
             "user": user,
             "orders": rows,
+            "stays": stay_map(db, rows),
             "total": total,
             "page": page,
             "page_size": PAGE_SIZE,
@@ -250,6 +277,7 @@ def order_list(
             "statuses": MAIN_FLOW,
             "salespeople": salespeople,
             "can_create": can_create_order(user),
+            "can_export": can_export_orders(user),
             "filters": {
                 "status": status,
                 "q": q,
@@ -258,6 +286,73 @@ def order_list(
                 "date_to": date_to,
             },
         },
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 导出（必须注册在 /{order_id} 之前，否则 "export.csv" 会被当成订单 id）
+# --------------------------------------------------------------------------- #
+@router.get("/export.csv")
+def export_orders(
+    status: str = Query(""),
+    q: str = Query(""),
+    owner: str = Query(""),
+    date_from: str = Query(""),
+    date_to: str = Query(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    if not can_export_orders(user):
+        raise Forbidden("当前角色没有导出权限（文档 §2.3：销售导自己的、管理员导全部）")
+
+    conditions, _ = _build_conditions(
+        user, status=status, q=q, owner=owner, date_from=date_from, date_to=date_to
+    )
+    stmt = select(Order).options(joinedload(Order.salesperson))
+    for condition in conditions:
+        stmt = stmt.where(condition)
+    rows = db.scalars(stmt.order_by(Order.order_date.desc(), Order.id.desc())).unique().all()
+
+    stays = stay_map(db, rows)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "订单号", "状态", "平台", "店铺", "下单日期", "下单时间", "商品需求", "数量",
+            "销售金额", "币种", "销售", "创建时间", "当前状态停留天数", "是否超时", "有无未了结异常", "取消原因",
+        ]
+    )
+    for order in rows:
+        stay = stays.get(order.id)
+        writer.writerow(
+            [
+                order.order_no,
+                order.status,
+                order.platform or "",
+                order.shop or "",
+                order.order_date.isoformat(),
+                order.order_time or "",
+                order.product_desc,
+                order.quantity,
+                f"{order.sale_amount:g}",
+                order.sale_currency,
+                order.salesperson.display_name if order.salesperson else "",
+                order.created_at.strftime("%Y-%m-%d %H:%M"),
+                stay.days if stay and stay.days is not None else "",
+                "是" if stay and stay.overdue else "",
+                "是" if order.has_exception else "",
+                order.cancel_reason or "",
+            ]
+        )
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    filename = f"orders-{stamp}.csv"
+    # BOM 让 Excel 正确识别 UTF-8 中文
+    body = "\ufeff" + buffer.getvalue()
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -379,6 +474,7 @@ def order_detail(
             "exceptions": exceptions,
             "options": options_for(db, user, order),
             "stages": _stage_summary(db, order),
+            "stay": stay_map(db, [order]).get(order.id),
             "msg": msg,
             "error": error,
             "can_edit": can_edit_order(user, order),
