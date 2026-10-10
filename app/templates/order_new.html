@@ -67,6 +67,16 @@
         {% endfor %}
       </select>
     </label>
+    <label class="field">
+      <span>指派采购</span>
+      <select name="assigned_purchaser_id">
+        <option value="">不指定（谁先看到谁接）</option>
+        {% for p in purchasers %}
+        <option value="{{ p.id }}" {% if assigned_id == p.id %}selected{% endif %}>{{ p.display_name }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint">指定后只有他能在待采购阶段看到这单；不指定则先接先得</span>
+    </label>
   </div>
 
   <div class="field">

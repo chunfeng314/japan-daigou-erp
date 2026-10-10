@@ -142,6 +142,31 @@ def _existing_image_items(db: Session, order: Order) -> list[dict]:
     ]
 
 
+def _resolve_purchaser(db: Session, raw: str | None) -> User | None:
+    """把表单里的采购员 id 变成 User。
+
+    校验角色：不能把单指派给销售或仓管 —— 否则这张单会从所有采购的视野里消失。
+    指派给已停用的人同样拒绝（留空 = 未分配，先接先得）。
+    """
+    if not raw or not raw.isdigit():
+        return None
+    user = db.get(User, int(raw))
+    if user is None or user.role != Role.PURCHASER.value or not user.is_active:
+        return None
+    return user
+
+
+def _purchasers(db: Session) -> list[User]:
+    """可选的采购员（建单时指定用）。已停用的不给列 —— 指派给一个不能登录的人没有意义。"""
+    return list(
+        db.scalars(
+            select(User)
+            .where(User.role == Role.PURCHASER.value, User.is_active == 1)
+            .order_by(User.display_name)
+        ).all()
+    )
+
+
 def _render_order_form(
     request: Request,
     user: User,
@@ -161,6 +186,9 @@ def _render_order_form(
         "form_action": f"/orders/{order.id}/edit" if order else "/orders/new",
         "edit_order": order,
         "existing_images": _existing_image_items(db, order) if order else [],
+        "purchasers": _purchasers(db),
+        "assigned_id": int(form.get("assigned_purchaser_id") or 0)
+        or (order.assigned_purchaser_id or 0 if order else 0),
     }
     return templates.TemplateResponse(
         request, "order_new.html", context, status_code=status_code
@@ -247,7 +275,9 @@ def order_list(
         count_stmt = count_stmt.where(condition)
     total = int(db.scalar(count_stmt) or 0)
 
-    stmt = select(Order).options(joinedload(Order.salesperson))
+    stmt = select(Order).options(
+        joinedload(Order.salesperson), joinedload(Order.assigned_purchaser)
+    )
     for condition in conditions:
         stmt = stmt.where(condition)
     rows = (
@@ -312,7 +342,9 @@ def export_orders(
     conditions, _ = _build_conditions(
         user, status=status, q=q, owner=owner, date_from=date_from, date_to=date_to
     )
-    stmt = select(Order).options(joinedload(Order.salesperson))
+    stmt = select(Order).options(
+        joinedload(Order.salesperson), joinedload(Order.assigned_purchaser)
+    )
     for condition in conditions:
         stmt = stmt.where(condition)
     rows = db.scalars(stmt.order_by(Order.order_date.desc(), Order.id.desc())).unique().all()
@@ -323,7 +355,8 @@ def export_orders(
     writer.writerow(
         [
             "订单号", "状态", "平台", "店铺", "下单日期", "下单时间", "商品需求", "数量",
-            "销售金额", "币种", "销售", "创建时间", "当前状态停留天数", "是否超时", "有无未了结异常", "取消原因",
+            "销售金额", "币种", "销售", "采购负责人", "创建时间",
+            "当前状态停留天数", "是否超时", "有无未了结异常", "取消原因",
         ]
     )
     for order in rows:
@@ -341,6 +374,7 @@ def export_orders(
                 f"{order.sale_amount:g}",
                 order.sale_currency,
                 order.salesperson.display_name if order.salesperson else "",
+                (order.assigned_purchaser.display_name if order.assigned_purchaser else ""),
                 format_display(order.created_at),
                 stay.days if stay and stay.days is not None else "",
                 "是" if stay and stay.overdue else "",
@@ -431,6 +465,7 @@ def order_create(
     quantity: str = Form(...),
     sale_amount: str = Form(...),
     sale_currency: str = Form("JPY"),
+    assigned_purchaser_id: str = Form(""),
     image_keys: str = Form("[]"),
     image_names: str = Form("[]"),
     user: User = Depends(require_user),
@@ -448,6 +483,7 @@ def order_create(
         "quantity": quantity,
         "sale_amount": sale_amount,
         "sale_currency": sale_currency,
+        "assigned_purchaser_id": assigned_purchaser_id,
     }
     parsed_date, desc, qty, amount, errors = _validate_order_form(
         order_date, product_desc, quantity, sale_amount
@@ -466,6 +502,7 @@ def order_create(
         shop=shop,
         order_time=order_time,
         sale_currency=sale_currency,
+        assigned_purchaser=_resolve_purchaser(db, assigned_purchaser_id),
         image_keys=_parse_json_list(image_keys),
         image_names=_parse_json_list(image_names),
     )
@@ -646,6 +683,7 @@ def order_edit_submit(
     quantity: str = Form(...),
     sale_amount: str = Form(...),
     sale_currency: str = Form("JPY"),
+    assigned_purchaser_id: str = Form(""),
     image_keys: str = Form("[]"),
     image_names: str = Form("[]"),
     user: User = Depends(require_user),
@@ -670,6 +708,7 @@ def order_edit_submit(
             "quantity": quantity,
             "sale_amount": sale_amount,
             "sale_currency": sale_currency,
+            "assigned_purchaser_id": assigned_purchaser_id,
         }
         return _render_order_form(
             request, user, db, form=form, errors=errors, order=order, status_code=400
@@ -690,6 +729,17 @@ def order_edit_submit(
         changed.append("下单时间")
     if order.order_date != parsed_date:
         changed.append("下单日期")
+
+    # 采购指派：只在还没人开始采购时才允许改 —— 订单已经有人在跟了，
+    # 悄悄换人会让"谁负责"变得说不清。
+    new_purchaser = _resolve_purchaser(db, assigned_purchaser_id)
+    if order.status == Status.PENDING_PURCHASE.value and new_purchaser != order.assigned_purchaser:
+        changed.append(
+            "采购负责人"
+            if new_purchaser is None
+            else f"采购负责人→{new_purchaser.display_name}"
+        )
+        order.assigned_purchaser_id = new_purchaser.id if new_purchaser else None
 
     order.platform = platform.strip() or None
     order.shop = shop.strip() or None

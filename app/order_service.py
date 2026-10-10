@@ -44,6 +44,7 @@ def create_order(
     shop: str | None = None,
     order_time: str | None = None,
     sale_currency: str = "JPY",
+    assigned_purchaser: User | None = None,
     image_keys: list[str] | None = None,
     image_names: list[str] | None = None,
     note: str | None = None,  # noqa: ARG001  预留给后续"订单备注"
@@ -65,6 +66,7 @@ def create_order(
             sale_amount=sale_amount,
             sale_currency=sale_currency or "JPY",
             salesperson_id=salesperson.id,
+            assigned_purchaser_id=assigned_purchaser.id if assigned_purchaser else None,
             status=Status.PENDING_PURCHASE.value,
         )
         try:

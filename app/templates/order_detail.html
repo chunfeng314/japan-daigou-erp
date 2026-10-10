@@ -97,6 +97,15 @@
     <div><dt>平台</dt><dd>{{ order.platform or '—' }}</dd></div>
     <div><dt>店铺</dt><dd>{{ order.shop or '—' }}</dd></div>
     <div><dt>下单日期</dt><dd>{{ order.order_date }}{% if order.order_time %} {{ order.order_time }}{% endif %}</dd></div>
+    <div><dt>采购负责人</dt><dd>
+      {% if order.assigned_purchaser %}
+        {{ order.assigned_purchaser.display_name }}<span class="muted">（销售指派）</span>
+      {% elif order.status == '待采购' %}
+        <span class="muted">未分配 · 先接先得</span>
+      {% else %}
+        —
+      {% endif %}
+    </dd></div>
     {% if order.cancel_reason %}
     <div><dt>取消原因</dt><dd class="kv-wide danger-text">{{ order.cancel_reason }}</dd></div>
     {% endif %}

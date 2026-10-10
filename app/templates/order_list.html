@@ -74,7 +74,7 @@
     <table class="table table-cards">
       <thead>
         <tr>
-          <th>订单号</th><th>商品</th><th>状态</th><th>销售</th>
+          <th>订单号</th><th>商品</th><th>状态</th><th>销售</th><th>采购</th>
           <th class="num">数量</th><th class="num">销售金额</th><th>下单日期</th><th>停留</th>
         </tr>
       </thead>
@@ -90,6 +90,15 @@
           <td class="cell-desc" data-label="商品">{{ o.product_desc }}</td>
           <td data-label="状态"><span class="badge tone-{{ STATUS_TONES.get(o.status, 'todo') }}">{{ o.status }}</span></td>
           <td data-label="销售">{{ o.salesperson.display_name if o.salesperson else '—' }}</td>
+          <td data-label="采购">
+            {% if o.assigned_purchaser %}
+              {{ o.assigned_purchaser.display_name }}
+            {% elif o.status == '待采购' %}
+              <span class="muted">未分配</span>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
           <td class="num" data-label="数量">{{ o.quantity }}</td>
           <td class="num" data-label="销售金额">{{ '{:,.0f}'.format(o.sale_amount) }} {{ o.sale_currency }}</td>
           <td class="muted" data-label="下单日期">{{ o.order_date }}{% if o.order_time %} {{ o.order_time }}{% endif %}</td>

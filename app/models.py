@@ -80,6 +80,10 @@ class Order(Base):
     sale_currency: Mapped[str] = mapped_column(String(8), default="JPY", nullable=False)
 
     salesperson_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    #: 采购负责人：销售建单时可指定；为空 = 未分配，采购先接先得。
+    #: 与 `purchases.purchaser_id`（实际经办人）可以不同 —— 指派的休假时可以换人接。
+    assigned_purchaser_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    assigned_purchaser: Mapped["User | None"] = relationship(foreign_keys=[assigned_purchaser_id])
     status: Mapped[str] = mapped_column(
         String(24), default=Status.PENDING_PURCHASE.value, nullable=False, index=True
     )
