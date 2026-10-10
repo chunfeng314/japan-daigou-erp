@@ -35,6 +35,7 @@ from app.order_service import create_order, generate_order_no, recent_products  
 from app.permissions import can_edit_order  # noqa: E402
 from app.security import hash_password  # noqa: E402
 from app.state_machine import Role, Status  # noqa: E402
+from tests.support import wipe_all  # noqa: E402
 
 PASSWORD = "pw123456"
 
@@ -72,16 +73,7 @@ class OrderTestCase(unittest.TestCase):
         cls.client = TestClient(app)
 
     def setUp(self) -> None:
-        session = _session()
-        try:
-            session.execute(delete(StatusLog))
-            session.execute(delete(OrderImage))
-            session.execute(delete(Order))
-            session.execute(delete(ProductHistory))
-            session.execute(delete(User))
-            session.commit()
-        finally:
-            session.close()
+        wipe_all()
 
         self.admin_id = _create_user("admin", Role.ADMIN.value, "管理员")
         self.sales_a = _create_user("sales_a", Role.SALES.value, "销售甲")

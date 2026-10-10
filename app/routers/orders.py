@@ -15,12 +15,24 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..db import get_db
 from ..deps import Forbidden, require_user
-from ..models import Order, OrderImage, Purchase, StatusLog, User
+from ..models import (
+    JpDelivery,
+    JpShipment,
+    Order,
+    OrderException,
+    OrderImage,
+    Purchase,
+    Settlement,
+    StatusLog,
+    User,
+    ShReceive,
+)
 from ..order_service import create_order, recent_products
 from ..permissions import can_create_order, can_edit_order, can_view_order, visibility_filter
 from ..state_machine import MAIN_FLOW, Role, Status
 from ..storage import get_storage
 from ..templating import templates
+from ..transition_service import options_for
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 api_router = APIRouter(prefix="/api", tags=["orders-api"])
@@ -323,6 +335,7 @@ def order_detail(
     order_id: int,
     request: Request,
     msg: str | None = None,
+    error: str | None = None,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -337,6 +350,11 @@ def order_detail(
     ).all()
     logs = db.scalars(
         select(StatusLog).where(StatusLog.order_id == order.id).order_by(StatusLog.id.desc())
+    ).all()
+    exceptions = db.scalars(
+        select(OrderException)
+        .where(OrderException.order_id == order.id)
+        .order_by(OrderException.id.desc())
     ).all()
 
     operators = {
@@ -358,10 +376,95 @@ def order_detail(
             "image_urls": {img.id: storage.url_for(img.cos_key) for img in images},
             "logs": logs,
             "operators": operators,
+            "exceptions": exceptions,
+            "options": options_for(db, user, order),
+            "stages": _stage_summary(db, order),
             "msg": msg,
+            "error": error,
             "can_edit": can_edit_order(user, order),
         },
     )
+
+
+def _stage_summary(db: Session, order: Order) -> list[dict]:
+    """把各环节已登记的数据摊平，便于详情页一眼看到关键信息。"""
+    purchase = db.scalar(select(Purchase).where(Purchase.order_id == order.id))
+    receive = db.scalar(select(ShReceive).where(ShReceive.order_id == order.id))
+    shipment = db.scalar(select(JpShipment).where(JpShipment.order_id == order.id))
+    delivery = db.scalar(select(JpDelivery).where(JpDelivery.order_id == order.id))
+    settlement = db.scalar(select(Settlement).where(Settlement.order_id == order.id))
+
+    blocks: list[dict] = []
+    if purchase is not None and purchase.purchase_price is not None:
+        blocks.append(
+            {
+                "title": "采购",
+                "rows": [
+                    ("采购成本", f"{purchase.purchase_price:,.2f} {purchase.purchase_currency}"),
+                    ("来源平台", purchase.source_platform or "—"),
+                    ("国内快递单号", purchase.domestic_tracking_no or "—"),
+                    ("承运商", purchase.carrier or "—"),
+                    ("国内运费", f"{purchase.domestic_shipping_fee:,.2f}" if purchase.domestic_shipping_fee is not None else "—"),
+                    ("其他费用", f"{purchase.other_fee:,.2f}" if purchase.other_fee is not None else "—"),
+                    ("来源链接", purchase.source_url or "—"),
+                ],
+            }
+        )
+    if receive is not None and (receive.received_date or receive.handler):
+        blocks.append(
+            {
+                "title": "上海收货",
+                "rows": [
+                    ("是否收到", "已收到" if receive.received else "未收到"),
+                    ("收货日期", receive.received_date or "—"),
+                    ("经手人", receive.handler or "—"),
+                    ("备注", receive.note or "—"),
+                ],
+            }
+        )
+    if shipment is not None and (shipment.carrier_person or shipment.flight_date):
+        blocks.append(
+            {
+                "title": "带货安排",
+                "rows": [
+                    ("带货人", shipment.carrier_person or "—"),
+                    ("联系方式", shipment.carrier_contact or "—"),
+                    ("航班日期", shipment.flight_date or "—"),
+                    ("航班号", shipment.flight_no or "—"),
+                    ("行程", f"{shipment.from_loc or '—'} → {shipment.to_loc or '—'}"),
+                    ("备注", shipment.note or "—"),
+                ],
+            }
+        )
+    if delivery is not None and delivery.ship_date:
+        blocks.append(
+            {
+                "title": "发货给买家",
+                "rows": [
+                    ("发货日期", delivery.ship_date),
+                    ("物流承运", delivery.carrier or "—"),
+                    ("物流单号", delivery.tracking_no or "—"),
+                    ("备注", delivery.note or "—"),
+                ],
+            }
+        )
+    if settlement is not None:
+        blocks.append(
+            {
+                "title": "结算",
+                "rows": [
+                    ("结算日期", settlement.settle_date),
+                    ("最终结算金额", f"{settlement.final_amount:,.0f} {settlement.currency}"),
+                    ("平台手续费", f"{settlement.platform_fee:,.2f}" if settlement.platform_fee is not None else "—"),
+                    ("日本国内运费", f"{settlement.japan_shipping:,.2f}" if settlement.japan_shipping is not None else "—"),
+                    ("退款", f"{settlement.refund:,.2f}" if settlement.refund is not None else "—"),
+                    ("其他扣款", f"{settlement.other_deduction:,.2f}" if settlement.other_deduction is not None else "—"),
+                    ("结算单号", settlement.settle_ref or "—"),
+                    ("结算期", settlement.period or "—"),
+                ],
+            }
+        )
+    return blocks
 
 
 # --------------------------------------------------------------------------- #

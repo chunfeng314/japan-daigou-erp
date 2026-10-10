@@ -55,14 +55,16 @@ app/
   state_machine.py  ★ 订单状态机（唯一事实来源：谁能推、推之前必须填什么）
   permissions.py    订单可见性（销售只看自己 / 采购看待采购+经手 / 上海仓按单号查 / 管理员全部）
   order_service.py  订单号生成（并发安全）、建单、商品需求历史累积
+  transition_service.py ★ 状态推进通用机制 + 环节表单字段声明 + 异常追踪
   storage.py        ★ 存储抽象：local（本机盘）/ cos（腾讯云直传）
   security.py       口令哈希（stdlib PBKDF2）+ 签名会话 cookie
   deps.py           当前登录人 / 角色守卫
-  routers/          auth(登录) · home(首页待办) · orders(列表/录单/详情/编辑) · uploads(上传与读取) · users(账号管理)
+  routers/          auth(登录) · home(首页待办) · orders(列表/录单/详情/编辑)
+                    · stages(状态推进 + 异常) · uploads(上传与受权读取) · users(账号管理)
   templates/        base / login / home / order_list / order_new / order_detail / users / forbidden
   static/           style.css · orders.js（历史下拉 + 截图上传）· htmx.min.js
 scripts/init_db.py  建表 + 首次创建管理员
-tests/              状态机 · 认证权限 · 订单与上传（共 90 项）
+tests/              状态机 · 认证权限 · 订单与上传 · 状态推进与异常（共 130 项）
 ```
 
 ### 截图存储怎么切到 COS
@@ -80,7 +82,25 @@ tests/              状态机 · 认证权限 · 订单与上传（共 90 项）
 
 - **D1 已完成**：数据模型 · 状态机 · 登录/账号管理
 - **D2~3 已完成**：销售录单（表单 + 商品需求历史复用 + 截图上传）· 订单列表（筛选/分页/权限/异常角标）· 订单详情 · 编辑
-- 后续：D4 采购处理 → D5 收货/带货 → D6 发货登记 + 异常追踪 + 结算 → D7 收口 → D8~10 部署东京
+- **D4~D6 已完成**：**全链路状态推进**（采购 → 收货 → 带货 → 发货 → 结算）+ 取消 / 回退 + **异常追踪**（少货/错货）
+- 后续：D7 查询与首页待办收口 → D8~10 手机端适配 + 部署东京 + 实测国内访问
+
+### 状态是怎么推进的
+
+只有一个通用端点 `POST /orders/{id}/transition`，目标状态写在表单的 `to_status` 里：
+
+```
+校验（问 state_machine：谁能推、必填什么）
+  → 落环节表（purchases / sh_receives / jp_shipments / jp_deliveries / settlements）
+  → 改主状态
+  → 写 status_logs
+```
+
+环节的表单字段声明在 `app/transition_service.py` 的 `STAGE_FIELDS`；
+**必填项不在这里写死**，渲染时从状态机的 `required_fields` 取，避免两处规则漂移
+（有测试专门盯这条：`test_stage_fields_match_required_from_state_machine`）。
+
+以后加环节 = 改 `state_machine` + 在 `STAGE_FIELDS` 补字段，**不用加路由**。
 
 > ⚠️ **COS 直传路径已实现但尚未用真实凭据验证过**（`local` 模式已真机验证）。
 

@@ -94,7 +94,7 @@ class TestHappyPath(unittest.TestCase):
                 Role.SALES,
                 Status.WAITING_SETTLEMENT,
                 Status.COMPLETED,
-                {"final_amount": 4200},
+                {"settle_date": "2026-10-20", "final_amount": 4200},
             ),
         ]
         for role, src, dst, payload in steps:
@@ -171,7 +171,7 @@ class TestRequiredFields(unittest.TestCase):
             src=Status.WAITING_SETTLEMENT,
             dst=Status.COMPLETED,
             is_owner=True,
-            payload={"final_amount": 0},
+            payload={"settle_date": "2026-10-20", "final_amount": 0},
         )
         self.assertFalse(result.allowed)
         self.assertEqual(result.missing_fields, ("final_amount",))
@@ -182,7 +182,7 @@ class TestRequiredFields(unittest.TestCase):
             src=Status.WAITING_SETTLEMENT,
             dst=Status.COMPLETED,
             is_owner=True,
-            payload={"final_amount": -5},
+            payload={"settle_date": "2026-10-20", "final_amount": -5},
         )
         self.assertFalse(result.allowed)
 
@@ -192,7 +192,7 @@ class TestRequiredFields(unittest.TestCase):
             src=Status.WAITING_SETTLEMENT,
             dst=Status.COMPLETED,
             is_owner=True,
-            payload={"final_amount": "abc"},
+            payload={"settle_date": "2026-10-20", "final_amount": "abc"},
         )
         self.assertFalse(result.allowed)
 
@@ -203,9 +203,21 @@ class TestRequiredFields(unittest.TestCase):
             src=Status.WAITING_SETTLEMENT,
             dst=Status.COMPLETED,
             is_owner=True,
-            payload={"final_amount": "4200.5"},
+            payload={"settle_date": "2026-10-20", "final_amount": "4200.5"},
         )
         self.assertTrue(result.allowed, result.reason)
+
+    def test_settle_date_is_required(self):
+        result = check_transition(
+            role=Role.SALES,
+            src=Status.WAITING_SETTLEMENT,
+            dst=Status.COMPLETED,
+            is_owner=True,
+            payload={"final_amount": "4200.5"},
+        )
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.missing_fields, ("settle_date",))
+        self.assertIn("结算日期", result.reason)
 
 
 class TestCancelAndRollback(unittest.TestCase):

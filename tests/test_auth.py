@@ -17,13 +17,13 @@ os.environ["ERP_SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["ERP_COOKIE_SECURE"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import delete, select  # noqa: E402
 
 from app.db import get_sessionmaker, init_db, reset_state  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import User  # noqa: E402
 from app.security import hash_password  # noqa: E402
 from app.state_machine import Role  # noqa: E402
+from tests.support import wipe_all  # noqa: E402
 
 PASSWORD = "pw123456"
 
@@ -59,18 +59,7 @@ class AuthTests(unittest.TestCase):
         cls.client = TestClient(app)
 
     def setUp(self) -> None:
-        session = get_sessionmaker()()
-        try:
-            # 只清理本模块自己造的用户，别 `delete(User)` 全表 —— 同进程里别的测试模块
-            # 可能已经建了订单，全删会踩外键约束
-            session.execute(
-                delete(User).where(
-                    User.username.in_(["admin", "sales1", "off1", "buyer1", "shortpw"])
-                )
-            )
-            session.commit()
-        finally:
-            session.close()
+        wipe_all()
         self.admin_id = _create_user("admin", Role.ADMIN.value, display_name="管理员甲")
         self.sales_id = _create_user("sales1", Role.SALES.value, display_name="销售乙")
         _create_user("off1", Role.WAREHOUSE.value, display_name="停用丙", is_active=0)
