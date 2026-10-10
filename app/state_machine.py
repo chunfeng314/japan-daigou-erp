@@ -77,6 +77,22 @@ TERMINAL_STATUSES: frozenset[Status] = frozenset({Status.COMPLETED, Status.CANCE
 #: 「待办」语义的状态 —— 首页按角色列出这些时才有意义
 OPEN_STATUSES: frozenset[Status] = frozenset(MAIN_FLOW)
 
+#: 状态 → 视觉色调（模板里拼 class 用）
+STATUS_TONES: dict[Status, str] = {
+    Status.PENDING_PURCHASE: "todo",
+    Status.PURCHASING: "doing",
+    Status.WAITING_SH_RECEIPT: "doing",
+    Status.RECEIVED_AWAITING_HANDCARRY: "doing",
+    Status.HANDCARRY_ARRANGED: "doing",
+    Status.SHIPPED: "info",
+    Status.WAITING_SETTLEMENT: "warn",
+    Status.COMPLETED: "ok",
+    Status.CANCELLED: "muted",
+}
+
+#: 供模板直接按下标取：{"待采购": "todo", ...}
+STATUS_TONE_BY_VALUE: dict[str, str] = {s.value: tone for s, tone in STATUS_TONES.items()}
+
 #: 需要是正数的字段（金额 / 数量）。空值或 <= 0 都算不合格。
 NUMERIC_FIELDS: frozenset[str] = frozenset({"purchase_price", "final_amount", "sale_amount", "quantity"})
 

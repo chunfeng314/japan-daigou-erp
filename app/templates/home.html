@@ -5,16 +5,22 @@
 <h1 class="page-title">你好，{{ user.display_name }}</h1>
 <p class="page-sub">你的角色是 <span class="badge role-{{ user.role }}">{{ user.role_label }}</span>，下面是你现在要盯的事。</p>
 
+<div class="head-actions quick-actions">
+  <a class="btn btn-primary" href="/orders">全部订单</a>
+  {% if user.role in [Role.SALES.value, Role.ADMIN.value] %}
+  <a class="btn" href="/orders/new">+ 录入订单</a>
+  {% endif %}
+</div>
+
 <section class="todos">
   {% for todo in todos %}
-  <div class="todo-card">
+  <a class="todo-card" href="/orders{% if todo.status_filter %}?status={{ todo.status_filter|urlencode }}{% endif %}">
     <div class="todo-head">
       <span class="todo-title">{{ todo.title }}</span>
       <span class="todo-count">{{ todo.count }}</span>
     </div>
     {% if todo.hint %}<p class="todo-hint">{{ todo.hint }}</p>{% endif %}
-    {% if todo.status_filter %}<p class="todo-hint muted">对应状态：{{ todo.status_filter }}</p>{% endif %}
-  </div>
+  </a>
   {% endfor %}
 </section>
 
@@ -31,6 +37,6 @@
 </section>
 
 <div class="notice">
-  本期（D1）已交付：数据模型、状态机、登录与账号管理。订单录入/采购/收货/带货/发货/结算/异常追踪将在后续排期逐步上线。
+  已交付：数据模型、状态机、登录与账号管理、<b>销售录单与订单查询</b>。采购登记、收货、带货、发货、结算、异常追踪将在后续排期上线。
 </div>
 {% endblock %}

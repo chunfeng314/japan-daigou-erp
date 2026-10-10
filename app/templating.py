@@ -9,6 +9,7 @@ from .state_machine import (  # noqa: F401  供模板使用
     FIELD_LABELS,
     MAIN_FLOW,
     ROLE_LABELS,
+    STATUS_TONE_BY_VALUE,
     ExceptionStatus,
     ExceptionType,
     Role,
@@ -25,6 +26,7 @@ templates.env.globals.update(
     ROLE_LABELS=ROLE_LABELS,
     MAIN_FLOW=MAIN_FLOW,
     FIELD_LABELS=FIELD_LABELS,
+    STATUS_TONES=STATUS_TONE_BY_VALUE,
     ExceptionType=ExceptionType,
     ExceptionStatus=ExceptionStatus,
 )

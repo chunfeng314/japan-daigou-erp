@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ order.order_no }} · {{ app_title }}{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="alert alert-ok">{{ msg }}</div>{% endif %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">
+      {{ order.order_no }}
+      <span class="badge tone-{{ STATUS_TONES.get(order.status, 'todo') }}">{{ order.status }}</span>
+      {% if order.has_exception %}<span class="flag-ex">有异常</span>{% endif %}
+    </h1>
+    <p class="page-sub">销售：{{ salesperson.display_name if salesperson else '—' }} · 创建于 {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+  </div>
+  <div class="head-actions">
+    {% if can_edit %}<a class="btn btn-primary" href="/orders/{{ order.id }}/edit">编辑</a>{% endif %}
+    <a class="btn" href="/orders">返回列表</a>
+  </div>
+</div>
+
+<section class="panel">
+  <h2 class="panel-title">订单信息</h2>
+  <dl class="kv">
+    <div><dt>商品需求</dt><dd class="kv-wide">{{ order.product_desc }}</dd></div>
+    <div><dt>数量</dt><dd>{{ order.quantity }}</dd></div>
+    <div><dt>销售金额</dt><dd>{{ '{:,.0f}'.format(order.sale_amount) }} {{ order.sale_currency }}</dd></div>
+    <div><dt>平台</dt><dd>{{ order.platform or '—' }}</dd></div>
+    <div><dt>店铺</dt><dd>{{ order.shop or '—' }}</dd></div>
+    <div><dt>下单日期</dt><dd>{{ order.order_date }}{% if order.order_time %} {{ order.order_time }}{% endif %}</dd></div>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2 class="panel-title">订单截图 <span class="muted">（{{ images|length }} 张）</span></h2>
+  {% if images %}
+  <div class="gallery">
+    {% for img in images %}
+    <a class="gallery-item" href="{{ image_urls[img.id] }}" target="_blank" rel="noopener">
+      <img src="{{ image_urls[img.id] }}" alt="{{ img.filename or '订单截图' }}" loading="lazy">
+      <span class="gallery-name">{{ img.filename or '截图' }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">没有截图。</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2 class="panel-title">流转记录</h2>
+  {% if logs %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead><tr><th>时间</th><th>从</th><th>到</th><th>操作人</th><th>备注</th></tr></thead>
+      <tbody>
+      {% for log in logs %}
+        <tr>
+          <td class="muted">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>{{ log.from_status or '—' }}</td>
+          <td><span class="badge tone-{{ STATUS_TONES.get(log.to_status, 'todo') }}">{{ log.to_status }}</span></td>
+          <td>{{ operators.get(log.operator_id, '—') }}</td>
+          <td class="muted">{{ log.note or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">暂无记录。</p>
+  {% endif %}
+</section>
+
+<div class="notice">
+  下一步操作面板（采购登记 / 收货 / 带货 / 发货 / 结算 / 异常追踪）将在后续排期上线。
+</div>
+{% endblock %}

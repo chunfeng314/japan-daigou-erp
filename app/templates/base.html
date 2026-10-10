@@ -13,6 +13,7 @@
   <a class="brand" href="/">{{ app_title }}</a>
   <nav class="nav">
     <a href="/">首页</a>
+    <a href="/orders">订单</a>
     {% if user.role == Role.ADMIN.value %}<a href="/admin/users">账号管理</a>{% endif %}
   </nav>
   <div class="who">

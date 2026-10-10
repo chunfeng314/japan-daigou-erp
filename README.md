@@ -53,14 +53,35 @@ app/
   db.py             引擎/会话；SQLite WAL + 外键约束
   models.py         11 张表（对应文档 §3）
   state_machine.py  ★ 订单状态机（唯一事实来源：谁能推、推之前必须填什么）
+  permissions.py    订单可见性（销售只看自己 / 采购看待采购+经手 / 上海仓按单号查 / 管理员全部）
+  order_service.py  订单号生成（并发安全）、建单、商品需求历史累积
+  storage.py        ★ 存储抽象：local（本机盘）/ cos（腾讯云直传）
   security.py       口令哈希（stdlib PBKDF2）+ 签名会话 cookie
   deps.py           当前登录人 / 角色守卫
-  routers/          auth(登录) · home(首页待办) · users(账号管理)
-  templates/        base / login / home / users / forbidden
-  static/           style.css · htmx.min.js（本地引入，不依赖 CDN）
+  routers/          auth(登录) · home(首页待办) · orders(列表/录单/详情/编辑) · uploads(上传与读取) · users(账号管理)
+  templates/        base / login / home / order_list / order_new / order_detail / users / forbidden
+  static/           style.css · orders.js（历史下拉 + 截图上传）· htmx.min.js
 scripts/init_db.py  建表 + 首次创建管理员
-tests/              状态机单测 + 登录/权限集成测试
+tests/              状态机 · 认证权限 · 订单与上传（共 90 项）
 ```
 
-D1 已交付：**数据模型 · 状态机 · 登录与账号管理**。订单录入、采购、收货、带货、发货、结算、异常追踪按排期逐步上线。
+### 截图存储怎么切到 COS
+
+默认 `ERP_STORAGE=local`（存本机 `data/uploads/`，开发够用）。上线切 COS：
+
+1. `.env` 里改 `ERP_STORAGE=cos` 并填 `COS_SECRET_ID/KEY/REGION/BUCKET`；
+2. 装 SDK：`.venv/bin/pip install cos-python-sdk-v5`；
+3. 在 COS 控制台给存储桶配 **CORS**（允许来源=本站域名，方法=PUT/GET/HEAD）——
+   否则浏览器直传会被拦。
+
+业务代码不用改：前端会先问 `/api/uploads/sign` 拿落点，`cos` 模式下直接 `PUT` 到预签名地址。
+
+### 进度
+
+- **D1 已完成**：数据模型 · 状态机 · 登录/账号管理
+- **D2~3 已完成**：销售录单（表单 + 商品需求历史复用 + 截图上传）· 订单列表（筛选/分页/权限/异常角标）· 订单详情 · 编辑
+- 后续：D4 采购处理 → D5 收货/带货 → D6 发货登记 + 异常追踪 + 结算 → D7 收口 → D8~10 部署东京
+
+> ⚠️ **COS 直传路径已实现但尚未用真实凭据验证过**（`local` 模式已真机验证）。
+
 

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{% if edit_order %}编辑 {{ edit_order.order_no }}{% else %}录入订单{% endif %} · {{ app_title }}{% endblock %}
+
+{% block content %}
+<h1 class="page-title">{% if edit_order %}编辑订单 {{ edit_order.order_no }}{% else %}录入订单{% endif %}</h1>
+<p class="page-sub">一单一品：买家一单买多种商品，请拆成多张订单录入。</p>
+
+{% if errors %}
+<div class="alert alert-error">
+  <ul class="error-list">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="{{ form_action or '/orders/new' }}" class="panel form" id="order-form">
+  <div class="grid-2">
+    <label class="field">
+      <span>平台</span>
+      <input type="text" name="platform" value="{{ form.platform or '' }}" placeholder="如 Mercari / 雅虎拍卖">
+    </label>
+    <label class="field">
+      <span>店铺</span>
+      <input type="text" name="shop" value="{{ form.shop or '' }}" placeholder="选填">
+    </label>
+    <label class="field">
+      <span>下单日期 <b class="req">*</b></span>
+      <input type="date" name="order_date" value="{{ form.order_date or today }}" required>
+    </label>
+    <label class="field">
+      <span>下单时间</span>
+      <input type="time" name="order_time" value="{{ form.order_time or '' }}">
+    </label>
+  </div>
+
+  <div class="field field-autocomplete">
+    <span>商品需求 / 名称 <b class="req">*</b></span>
+    <input type="text" name="product_desc" id="product-desc" autocomplete="off"
+           value="{{ form.product_desc or '' }}" placeholder="输入时会下拉你最近用过的商品" required>
+    <div class="suggest" id="suggest-box" hidden></div>
+    <span class="hint">支持从历史复用：聚焦输入框会列出你最近用过的 20 条。</span>
+  </div>
+
+  <div class="grid-3">
+    <label class="field">
+      <span>数量 <b class="req">*</b></span>
+      <input type="number" name="quantity" min="1" step="1" value="{{ form.quantity or 1 }}" required>
+    </label>
+    <label class="field">
+      <span>销售金额 <b class="req">*</b></span>
+      <input type="text" name="sale_amount" inputmode="decimal" value="{{ form.sale_amount or '' }}" placeholder="如 4200" required>
+    </label>
+    <label class="field">
+      <span>币种</span>
+      <select name="sale_currency">
+        {% for cur in ['JPY', 'CNY'] %}
+        <option value="{{ cur }}" {% if form.sale_currency == cur %}selected{% endif %}>{{ cur }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <div class="field">
+    <span>订单截图</span>
+    <input type="file" id="shot-input" accept="image/*" multiple>
+    <span class="hint" id="upload-hint">可多选；单张不超过 10MB。</span>
+    <div class="shot-list" id="shot-list"></div>
+    <input type="hidden" name="image_keys" id="image-keys" value="[]">
+    <input type="hidden" name="image_names" id="image-names" value="[]">
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary" id="submit-btn">{% if edit_order %}保存修改{% else %}保存订单{% endif %}</button>
+    <a class="btn" href="{% if edit_order %}/orders/{{ edit_order.id }}{% else %}/orders{% endif %}">取消</a>
+  </div>
+</form>
+
+<script id="history-data" type="application/json">{{ history_items | tojson }}</script>
+<script id="existing-images" type="application/json">{{ existing_images | tojson }}</script>
+<script src="/static/orders.js" defer></script>
+{% endblock %}

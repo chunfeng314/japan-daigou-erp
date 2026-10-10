@@ -61,7 +61,13 @@ class AuthTests(unittest.TestCase):
     def setUp(self) -> None:
         session = get_sessionmaker()()
         try:
-            session.execute(delete(User))
+            # 只清理本模块自己造的用户，别 `delete(User)` 全表 —— 同进程里别的测试模块
+            # 可能已经建了订单，全删会踩外键约束
+            session.execute(
+                delete(User).where(
+                    User.username.in_(["admin", "sales1", "off1", "buyer1", "shortpw"])
+                )
+            )
             session.commit()
         finally:
             session.close()

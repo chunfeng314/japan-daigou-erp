@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__, config
 from .db import init_db
 from .deps import Forbidden, LoginRequired, login_redirect_path
-from .routers import auth, home, users
+from .routers import auth, home, orders, uploads, users
 from .templating import templates
 
 
@@ -32,6 +32,9 @@ app.mount("/static", StaticFiles(directory=str(config.BASE_DIR / "app" / "static
 
 app.include_router(auth.router)
 app.include_router(home.router)
+app.include_router(orders.router)
+app.include_router(orders.api_router)
+app.include_router(uploads.router)
 app.include_router(users.router)
 
 

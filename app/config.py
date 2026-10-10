@@ -43,4 +43,25 @@ ADMIN_USERNAME: str = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD: str = os.environ.get("ADMIN_PASSWORD", "")
 ADMIN_DISPLAY_NAME: str = os.environ.get("ADMIN_DISPLAY_NAME", "系统管理员")
 
+# --------------------------------------------------------------------------- #
+# 文件存储（订单截图）
+#   local = 存本机 data/uploads/，开发与单机部署用（零外部依赖）
+#   cos   = 腾讯云 COS，生产用；截图由浏览器**直传**，不经服务器中转
+# --------------------------------------------------------------------------- #
+STORAGE_BACKEND: str = os.environ.get("ERP_STORAGE", "local").strip().lower()
+
+UPLOAD_DIR: Path = BASE_DIR / os.environ.get("ERP_UPLOAD_DIR", "data/uploads")
+MAX_UPLOAD_BYTES: int = int(os.environ.get("ERP_MAX_UPLOAD_MB", "10")) * 1024 * 1024
+ALLOWED_IMAGE_EXTS: frozenset[str] = frozenset(
+    {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".bmp"}
+)
+
+#: COS 预签名 URL 有效期（秒）
+COS_SIGNED_URL_EXPIRE: int = int(os.environ.get("ERP_COS_SIGN_EXPIRE", "900"))
+COS_SECRET_ID: str = os.environ.get("COS_SECRET_ID", "")
+COS_SECRET_KEY: str = os.environ.get("COS_SECRET_KEY", "")
+COS_REGION: str = os.environ.get("COS_REGION", "")
+COS_BUCKET: str = os.environ.get("COS_BUCKET", "")
+COS_PREFIX: str = os.environ.get("COS_PREFIX", "order-images").strip("/")
+
 APP_TITLE = "日代 ERP"
