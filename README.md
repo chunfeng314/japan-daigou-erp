@@ -132,13 +132,19 @@ ERP_LLM_MODEL=deepseek-flash
 
 | 模型名 | 实测 | 说明 |
 |---|---|---|
-| `deepseek-flash` | 基础对话 1.1s / 工具调用正常 / 74 token | 快、便宜 —— **当前用的** |
-| `deepseek-v4-pro` | 基础对话 1.7s / 工具调用正常 / 123 token | 更强、更慢、更贵 |
+| `deepseek-flash` | 1.1s / 工具调用正常 / **支持读图** | 快、便宜 —— **当前用的** |
+| `deepseek-v4-pro` | 1.7s / 工具调用正常 / **不支持读图** | 更强、更慢、更贵 |
 
 - ⚠️ **别写 `deepseek-chat` / `deepseek-reasoner`**：它们只是别名，都会被路由到 `deepseek-flash`，
   这种隐式映射出了问题不好排查。
-- ⚠️ **DeepSeek 目前没有视觉模型**（点名 `deepseek-vl` 会被 400 拒绝），
-  所以「截图预填录单」要另配支持视觉的厂商（通义 qwen-vl / GPT-4o 等）。
+
+**关于视觉能力（实测，别踩这个坑）**：把图按 OpenAI 视觉格式塞进 `messages`
+（`content` 数组 + `image_url` + base64）即可 —— **`deepseek-flash` 能正确读出图中文字、
+颜色，甚至数出图形个数**，所以截图预填直接用它就行，不需要另配厂商。
+
+> ⚠️ 我一开始判断"DeepSeek 没有视觉模型"，依据是 `/v1/models` 里没有单独的 VL 模型名、
+> 且点名 `deepseek-vl` 会被 400 拒 —— **这个推断是错的**：能力内置在 `flash` 里，
+> 不体现在模型名上。**判断模型能力要实测，别从模型清单推。**
 
 **实弹安全回归**（默认跳过，会花少量额度）：
 
