@@ -77,9 +77,26 @@ app/
 scripts/init_db.py  建表 + 首次创建管理员
 scripts/backup_db.py  每日备份：SQLite 一致性快照 + 截图清单 + 轮转（本地存储时连图片一起打包）
 scripts/preflight.py  上线自检：把「配置错了但看着正常」的问题提前揪出来
+scripts/local_rehearsal.py ★ 本地全流程彩排：不用服务器，走一遍真实业务链路
 deploy/              部署材料：systemd unit + timer · Caddyfile · 生产 .env 模板 · **DEPLOY.md 上线手册**
 tests/               状态机 · 认证权限 · 订单与上传 · 状态推进与异常 · 定时任务 · 助手 · 运维脚本（共 286 项）
 ```
+
+### 上线前：本地全流程彩排（不用服务器）
+
+```bash
+.venv/bin/python scripts/local_rehearsal.py            # 跑一遍
+.venv/bin/python scripts/local_rehearsal.py --headed   # 显示浏览器窗口，便于围观
+.venv/bin/python scripts/local_rehearsal.py --keep     # 保留临时数据以便排查
+```
+
+它会起一个**临时环境**（临时库 + 独立端口，绝不碰你的开发数据），然后用**真浏览器**
+把整条链路点一遍：建号 → 销售传截图录单 → 采购 → 上海仓收货/带货/发货 → 结算完成 →
+异常登记与了结 → 第二单卡住触发卡单提醒 → 权限隔离 → 导出 CSV → AI 助手 → 手机视口巡检 →
+备份与恢复演练。**某一步失败也继续往下跑**，最后给完整报告（不然只能看到第一个坑）。
+
+**为什么强调"真浏览器"**：直接调接口测不到"按钮点不动""JS 报错""折叠面板里点不到"这类问题。
+它会先展开 `<details>` 再点真实按钮 —— 就是要验证用户真的能操作。
 
 ### 部署
 
