@@ -1,0 +1,52 @@
+{# 这单的钱 —— 把散在各个环节的金额收拢到一处（分币种，不换汇、不算利润） #}
+<section class="panel money-card">
+  <h2 class="panel-title">这单的钱</h2>
+
+  {% if not money.has_any %}
+    <p class="muted">
+      还没登记任何成本。等采购登记完，这里会显示这单花了多少、各环节分别花了多少。
+    </p>
+  {% else %}
+    <table class="money-table">
+      <tbody>
+        <tr class="money-row money-in">
+          <td class="money-label">{{ money.sale.label }}<span class="muted">（销售录单时填的预期收入）</span></td>
+          <td class="money-value">{{ money.sale | money }}</td>
+        </tr>
+
+        {% for currency, total in money.totals_by_currency %}
+        <tr class="money-group">
+          <td colspan="2">支出（{{ currency | currency_name }}）</td>
+        </tr>
+          {% for item in money.expenses if item.currency == currency %}
+          <tr class="money-row">
+            <td class="money-label">
+              {{ item.label }}
+              {% if item.note %}<span class="muted">· {{ item.note }}</span>{% endif %}
+            </td>
+            <td class="money-value">{{ item | money }}</td>
+          </tr>
+          {% endfor %}
+        <tr class="money-row money-total">
+          <td class="money-label">小计</td>
+          <td class="money-value">{{ total | money(currency) }}</td>
+        </tr>
+        {% endfor %}
+
+        {% if money.settle %}
+        <tr class="money-group">
+          <td colspan="2">结算</td>
+        </tr>
+        <tr class="money-row money-in">
+          <td class="money-label">{{ money.settle.label }}<span class="muted">（平台实际打回来的钱）</span></td>
+          <td class="money-value">{{ money.settle | money }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <p class="hint">
+      支出按币种<b>分别</b>统计 —— 系统不自动换汇、也不计算利润（开发文档 §2.4 定的规矩）。
+    </p>
+  {% endif %}
+</section>

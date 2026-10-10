@@ -43,6 +43,7 @@ from ..sla import stay_info, stay_map
 from ..state_machine import MAIN_FLOW, Role, Status
 from ..storage import StorageError, get_storage, normalize_ext
 from ..templating import templates
+from ..money import collect as collect_money, format_money
 from ..timeutil import format_display
 from ..transition_service import options_for
 
@@ -561,6 +562,7 @@ def order_detail(
             "exceptions": exceptions,
             "options": options_for(db, user, order),
             "stages": _stage_summary(db, order),
+            "money": collect_money(db, order),
             "stay": stay_map(db, [order]).get(order.id),
             "msg": msg,
             "error": error,
@@ -579,16 +581,18 @@ def _stage_summary(db: Session, order: Order) -> list[dict]:
 
     blocks: list[dict] = []
     if purchase is not None and purchase.purchase_price is not None:
+        currency = purchase.purchase_currency or "CNY"
+        # 运费/其他费用共用采购币种 —— 原来渲染成裸数字，看不出是什么钱
         blocks.append(
             {
                 "title": "采购",
                 "rows": [
-                    ("采购成本", f"{purchase.purchase_price:,.2f} {purchase.purchase_currency}"),
+                    ("采购成本", format_money(purchase.purchase_price, currency)),
                     ("来源平台", purchase.source_platform or "—"),
                     ("国内快递单号", purchase.domestic_tracking_no or "—"),
                     ("承运商", purchase.carrier or "—"),
-                    ("国内运费", f"{purchase.domestic_shipping_fee:,.2f}" if purchase.domestic_shipping_fee is not None else "—"),
-                    ("其他费用", f"{purchase.other_fee:,.2f}" if purchase.other_fee is not None else "—"),
+                    ("国内运费", format_money(purchase.domestic_shipping_fee, currency)),
+                    ("其他费用", format_money(purchase.other_fee, currency)),
                     ("来源链接", purchase.source_url or "—"),
                 ],
             }
@@ -637,11 +641,11 @@ def _stage_summary(db: Session, order: Order) -> list[dict]:
                 "title": "结算",
                 "rows": [
                     ("结算日期", settlement.settle_date),
-                    ("最终结算金额", f"{settlement.final_amount:,.0f} {settlement.currency}"),
-                    ("平台手续费", f"{settlement.platform_fee:,.2f}" if settlement.platform_fee is not None else "—"),
-                    ("日本国内运费", f"{settlement.japan_shipping:,.2f}" if settlement.japan_shipping is not None else "—"),
-                    ("退款", f"{settlement.refund:,.2f}" if settlement.refund is not None else "—"),
-                    ("其他扣款", f"{settlement.other_deduction:,.2f}" if settlement.other_deduction is not None else "—"),
+                    ("最终结算金额", format_money(settlement.final_amount, settlement.currency)),
+                    ("平台手续费", format_money(settlement.platform_fee, settlement.currency)),
+                    ("日本国内运费", format_money(settlement.japan_shipping, settlement.currency)),
+                    ("退款", format_money(settlement.refund, settlement.currency)),
+                    ("其他扣款", format_money(settlement.other_deduction, settlement.currency)),
                     ("结算单号", settlement.settle_ref or "—"),
                     ("结算期", settlement.period or "—"),
                 ],

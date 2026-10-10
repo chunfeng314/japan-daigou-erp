@@ -112,10 +112,11 @@
   </dl>
 </section>
 
+{% include "_money_card.html" %}
+
 {% if stages %}
 <section class="panel">
-  <h2 class="panel-title">已登记的环节信息</h2>
-  <div class="stage-blocks">
+  <h2 class="panel-title">已登记的环节信息</h2>  <div class="stage-blocks">
     {% for block in stages %}
     <div class="stage-block">
       <h3 class="stage-title">{{ block.title }}</h3>
