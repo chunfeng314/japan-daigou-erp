@@ -41,6 +41,7 @@ from ..sla import stay_info, stay_map
 from ..state_machine import MAIN_FLOW, Role, Status
 from ..storage import get_storage
 from ..templating import templates
+from ..timeutil import format_display
 from ..transition_service import options_for
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -278,6 +279,7 @@ def order_list(
             "salespeople": salespeople,
             "can_create": can_create_order(user),
             "can_export": can_export_orders(user),
+            "filters_active": any([status, q, owner, date_from, date_to]),
             "filters": {
                 "status": status,
                 "q": q,
@@ -337,7 +339,7 @@ def export_orders(
                 f"{order.sale_amount:g}",
                 order.sale_currency,
                 order.salesperson.display_name if order.salesperson else "",
-                order.created_at.strftime("%Y-%m-%d %H:%M"),
+                format_display(order.created_at),
                 stay.days if stay and stay.days is not None else "",
                 "是" if stay and stay.overdue else "",
                 "是" if order.has_exception else "",

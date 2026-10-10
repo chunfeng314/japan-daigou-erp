@@ -39,6 +39,9 @@ SESSION_MAX_AGE: int = int(os.environ.get("ERP_SESSION_MAX_AGE", 60 * 60 * 12))
 #: 部署到 HTTPS 后置 1，让会话 cookie 带 Secure（本地 http 调试保持在 0）
 COOKIE_SECURE: bool = os.environ.get("ERP_COOKIE_SECURE", "0").lower() in {"1", "true", "yes"}
 
+#: 展示时区。库里存 UTC，界面/导出都按这个时区显示（团队在国内，默认东八区）
+DISPLAY_TZ: str = os.environ.get("ERP_DISPLAY_TZ", "Asia/Shanghai")
+
 ADMIN_USERNAME: str = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD: str = os.environ.get("ADMIN_PASSWORD", "")
 ADMIN_DISPLAY_NAME: str = os.environ.get("ADMIN_DISPLAY_NAME", "系统管理员")

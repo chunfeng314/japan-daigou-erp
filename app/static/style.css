@@ -303,3 +303,93 @@ a { color: var(--primary); text-decoration: none; }
 .stage-title { margin: 0 0 10px; font-size: 14px; font-weight: 500; color: var(--primary); }
 .stage-block .kv { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 14px; }
 .stage-block .kv dd { font-size: 14px; }
+
+/* 折叠式筛选（订单列表） */
+.filters > summary {
+  cursor: pointer; font-weight: 500;
+  display: flex; align-items: center; gap: 8px; list-style: none;
+}
+.filters > summary::-webkit-details-marker { display: none; }
+.filters > summary::before { content: "▸"; color: var(--muted); font-size: 12px; }
+.filters[open] > summary::before { content: "▾"; }
+.filters[open] > summary { margin-bottom: 14px; }
+
+/* ==========================================================================
+   手机端适配
+   —— 放在文件最后，确保能覆盖上面的桌面规则（同权重时后者胜）
+   目标：390px 宽（iPhone 12/13/14）下不横向滚动、可读、好点
+   ========================================================================== */
+@media (max-width: 700px) {
+  body { font-size: 14px; }
+  .wrap { padding: 14px 12px 32px; }
+  .panel { padding: 14px; }
+
+  /* ---- 顶栏：品牌独占一行，导航与用户信息下一行 ---- */
+  .topbar { padding: 8px 12px; gap: 6px 12px; flex-wrap: wrap; }
+  .brand { flex: 1 1 100%; font-size: 16px; }
+  .nav { flex: 1 1 auto; gap: 0; flex-wrap: nowrap; }
+  .nav a { padding: 10px 14px 10px 0; }
+  .who { margin-left: auto; gap: 8px; }
+  .who-name { font-size: 13px; }
+
+  /* ---- 触摸目标：不要低于 40px ---- */
+  .btn, .btn-plain { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .btn-block { width: 100%; }
+  /* 注意：不要在这里再覆盖 .btn-small 的高度 —— 它的元素同时带 .btn，
+     覆盖会把触摸目标压回 36px（这坑踩过一次） */
+  .input-small { min-height: 40px; }
+
+  /* ---- 输入框 16px：低于这个值 iOS 聚焦时会自动放大页面 ---- */
+  .field input, .field select, .field textarea { font-size: 16px; }
+  .filter-form .field { flex: 1 1 100%; }
+
+  /* ---- 键值表：改成紧凑的「标签左 / 值右」一行一条 ---- */
+  .kv { grid-template-columns: 1fr; gap: 0; }
+  .kv > div {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 7px 0; border-bottom: 1px dashed var(--border);
+  }
+  .kv > div:last-child { border-bottom: none; }
+  .kv dt { margin: 0; flex: 0 0 auto; }
+  .kv dd { text-align: right; }
+  .kv > div:has(.kv-wide) { display: block; }
+  .kv > div:has(.kv-wide) dd { text-align: left; margin-top: 4px; }
+  .stage-block .kv { grid-template-columns: 1fr; gap: 0; }
+
+  /* ---- 表格 → 卡片：宽表在手机上横滑很难用，直接竖排 ---- */
+  .table-cards thead { display: none; }
+  .table-cards { display: block; width: auto; }
+  .table-cards tbody { display: block; }
+  .table-cards tr {
+    display: block; margin-bottom: 10px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: #fff;
+  }
+  .table-cards td {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 4px 0; border: none; text-align: right;
+  }
+  .table-cards td::before {
+    content: attr(data-label); flex: 0 0 auto; text-align: left;
+    font-size: 12px; color: var(--muted);
+  }
+  /* 首列当卡片标题 */
+  .table-cards td.cell-primary {
+    display: block; text-align: left; font-size: 15px; font-weight: 600;
+    padding: 0 0 7px; margin-bottom: 5px; border-bottom: 1px solid var(--border);
+  }
+  .table-cards td.cell-primary::before { content: none; }
+  /* 长描述单独占一行，标签在上 */
+  .table-cards td.cell-desc { display: block; text-align: left; }
+  .table-cards td.cell-desc::before { display: block; margin-bottom: 2px; }
+  .table-cards .cell-desc { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; }
+  .table-cards .ops { flex-wrap: wrap; justify-content: flex-end; }
+
+  /* ---- 详情页 ---- */
+  .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .gallery-item, .gallery-item img { width: 100%; }
+  .gallery-item img { height: 140px; }
+  .op { padding: 12px 14px; }
+  .op > summary { min-height: 34px; }
+  .page-title { font-size: 19px; }
+  .head-actions { width: 100%; }
+}

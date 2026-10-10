@@ -13,7 +13,7 @@
       {% if order.has_exception %}<span class="flag-ex">有异常</span>{% endif %}
     </h1>
     <p class="page-sub">
-      销售：{{ salesperson.display_name if salesperson else '—' }} · 创建于 {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}
+      销售：{{ salesperson.display_name if salesperson else '—' }} · 创建于 {{ order.created_at | dt }}
       {% if stay and stay.days is not none %}
       · 当前状态停留 <b class="{% if stay.overdue %}danger-text{% endif %}">{{ stay.label }}</b>
       {% if stay.overdue %}<span class="flag-over">超时</span>{% endif %}
@@ -145,21 +145,21 @@
 
   {% if exceptions %}
   <div class="table-scroll">
-    <table class="table">
+    <table class="table table-cards">
       <thead><tr><th>类型</th><th>发现环节</th><th>涉及数量</th><th>问题描述</th><th>处理方式</th><th>状态</th><th>操作</th></tr></thead>
       <tbody>
       {% for ex in exceptions %}
         <tr class="{% if ex.ex_status == '已解决' %}row-off{% endif %}">
-          <td>{{ ex.exception_type }}</td>
-          <td>{{ ex.found_stage or '—' }}</td>
-          <td class="num">{{ ex.qty_affected if ex.qty_affected is not none else '—' }}</td>
-          <td class="cell-desc">{{ ex.detail or '—' }}</td>
-          <td>{{ ex.resolution or '—' }}</td>
-          <td>
+          <td class="cell-primary">{{ ex.exception_type }}</td>
+          <td data-label="发现环节">{{ ex.found_stage or '—' }}</td>
+          <td class="num" data-label="涉及数量">{{ ex.qty_affected if ex.qty_affected is not none else '—' }}</td>
+          <td class="cell-desc" data-label="问题描述">{{ ex.detail or '—' }}</td>
+          <td data-label="处理方式">{{ ex.resolution or '—' }}</td>
+          <td data-label="状态">
             {% if ex.ex_status == '已解决' %}<span class="tag tag-on">已解决</span>
             {% else %}<span class="flag-ex">{{ ex.ex_status }}</span>{% endif %}
           </td>
-          <td>
+          <td class="ops" data-label="操作">
             {% if user.role == Role.ADMIN.value %}
               {% if ex.ex_status == '已解决' %}
               <form method="post" action="/orders/{{ order.id }}/exceptions/{{ ex.id }}/reopen" class="inline-form">
@@ -229,16 +229,16 @@
   <h2 class="panel-title">流转记录</h2>
   {% if logs %}
   <div class="table-scroll">
-    <table class="table">
+    <table class="table table-cards">
       <thead><tr><th>时间</th><th>从</th><th>到</th><th>操作人</th><th>备注</th></tr></thead>
       <tbody>
       {% for log in logs %}
         <tr>
-          <td class="muted">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-          <td>{{ log.from_status or '—' }}</td>
-          <td><span class="badge tone-{{ STATUS_TONES.get(log.to_status, 'todo') }}">{{ log.to_status }}</span></td>
-          <td>{{ operators.get(log.operator_id, '—') }}</td>
-          <td class="muted">{{ log.note or '' }}</td>
+          <td class="muted" data-label="时间">{{ log.created_at | dt }}</td>
+          <td data-label="从">{{ log.from_status or '—' }}</td>
+          <td data-label="到"><span class="badge tone-{{ STATUS_TONES.get(log.to_status, 'todo') }}">{{ log.to_status }}</span></td>
+          <td data-label="操作人">{{ operators.get(log.operator_id, '—') }}</td>
+          <td class="muted" data-label="备注">{{ log.note or '' }}</td>
         </tr>
       {% endfor %}
       </tbody>

@@ -15,8 +15,12 @@ from .state_machine import (  # noqa: F401  供模板使用
     Role,
     Status,
 )
+from .timeutil import format_display
 
 templates = Jinja2Templates(directory=str(config.BASE_DIR / "app" / "templates"))
+
+#: 模板里统一用 `{{ x.created_at | dt }}` —— 别直接 strftime，库里是 UTC 会少 8 小时
+templates.env.filters["dt"] = format_display
 
 templates.env.globals.update(
     app_title=config.APP_TITLE,

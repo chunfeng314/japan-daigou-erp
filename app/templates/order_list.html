@@ -22,50 +22,56 @@
   </div>
 </div>
 
-<form method="get" action="/orders" class="panel filter-form">
-  <label class="field">
-    <span>状态</span>
-    <select name="status">
-      <option value="">全部</option>
-      {% for s in statuses %}
-      <option value="{{ s.value }}" {% if filters.status == s.value %}selected{% endif %}>{{ s.value }}</option>
-      {% endfor %}
-      <option value="已取消" {% if filters.status == '已取消' %}selected{% endif %}>已取消</option>
-    </select>
-  </label>
-  <label class="field">
-    <span>搜索（订单号 / 商品 / 国内快递单号）</span>
-    <input type="text" name="q" value="{{ filters.q }}" placeholder="输入订单号或商品关键词">
-  </label>
-  {% if user.role == Role.ADMIN.value %}
-  <label class="field">
-    <span>销售</span>
-    <select name="owner">
-      <option value="">全部</option>
-      {% for sp in salespeople %}
-      <option value="{{ sp.id }}" {% if filters.owner == sp.id|string %}selected{% endif %}>{{ sp.display_name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  {% endif %}
-  <label class="field">
-    <span>下单从</span>
-    <input type="date" name="date_from" value="{{ filters.date_from }}">
-  </label>
-  <label class="field">
-    <span>到</span>
-    <input type="date" name="date_to" value="{{ filters.date_to }}">
-  </label>
-  <div class="filter-actions">
-    <button type="submit" class="btn btn-primary">筛选</button>
-    <a class="btn" href="/orders">重置</a>
-  </div>
-</form>
+<details class="panel filters"{% if filters_active %} open{% endif %}>
+  <summary class="filters-summary">
+    <span>筛选条件</span>
+    {% if filters_active %}<span class="flag-over">已启用</span>{% endif %}
+  </summary>
+  <form method="get" action="/orders" class="filter-form">
+    <label class="field">
+      <span>状态</span>
+      <select name="status">
+        <option value="">全部</option>
+        {% for s in statuses %}
+        <option value="{{ s.value }}" {% if filters.status == s.value %}selected{% endif %}>{{ s.value }}</option>
+        {% endfor %}
+        <option value="已取消" {% if filters.status == '已取消' %}selected{% endif %}>已取消</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>搜索（订单号 / 商品 / 国内快递单号）</span>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="输入订单号或商品关键词">
+    </label>
+    {% if user.role == Role.ADMIN.value %}
+    <label class="field">
+      <span>销售</span>
+      <select name="owner">
+        <option value="">全部</option>
+        {% for sp in salespeople %}
+        <option value="{{ sp.id }}" {% if filters.owner == sp.id|string %}selected{% endif %}>{{ sp.display_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label class="field">
+      <span>下单从</span>
+      <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </label>
+    <label class="field">
+      <span>到</span>
+      <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </label>
+    <div class="filter-actions">
+      <button type="submit" class="btn btn-primary">筛选</button>
+      <a class="btn" href="/orders">重置</a>
+    </div>
+  </form>
+</details>
 
 {% if orders %}
 <div class="panel">
   <div class="table-scroll">
-    <table class="table">
+    <table class="table table-cards">
       <thead>
         <tr>
           <th>订单号</th><th>商品</th><th>状态</th><th>销售</th>
@@ -76,17 +82,18 @@
       {% for o in orders %}
         {% set stay = stays.get(o.id) %}
         <tr>
-          <td class="mono">
+          <td class="mono cell-primary">
             <a href="/orders/{{ o.id }}">{{ o.order_no }}</a>
             {% if o.has_exception %}<span class="flag-ex" title="有未了结的少货/错货异常">异常</span>{% endif %}
+            {% if stay and stay.overdue %}<span class="flag-over">超时</span>{% endif %}
           </td>
-          <td class="cell-desc">{{ o.product_desc }}</td>
-          <td><span class="badge tone-{{ STATUS_TONES.get(o.status, 'todo') }}">{{ o.status }}</span></td>
-          <td>{{ o.salesperson.display_name if o.salesperson else '—' }}</td>
-          <td class="num">{{ o.quantity }}</td>
-          <td class="num">{{ '{:,.0f}'.format(o.sale_amount) }} {{ o.sale_currency }}</td>
-          <td class="muted">{{ o.order_date }}{% if o.order_time %} {{ o.order_time }}{% endif %}</td>
-          <td class="{% if stay and stay.overdue %}stay-over{% else %}muted{% endif %}">
+          <td class="cell-desc" data-label="商品">{{ o.product_desc }}</td>
+          <td data-label="状态"><span class="badge tone-{{ STATUS_TONES.get(o.status, 'todo') }}">{{ o.status }}</span></td>
+          <td data-label="销售">{{ o.salesperson.display_name if o.salesperson else '—' }}</td>
+          <td class="num" data-label="数量">{{ o.quantity }}</td>
+          <td class="num" data-label="销售金额">{{ '{:,.0f}'.format(o.sale_amount) }} {{ o.sale_currency }}</td>
+          <td class="muted" data-label="下单日期">{{ o.order_date }}{% if o.order_time %} {{ o.order_time }}{% endif %}</td>
+          <td class="{% if stay and stay.overdue %}stay-over{% else %}muted{% endif %}" data-label="停留">
             {{ stay.label if stay else '—' }}{% if stay and stay.overdue %} <span class="flag-over">超时</span>{% endif %}
           </td>
         </tr>

@@ -36,7 +36,7 @@
 <section class="panel">
   <h2 class="panel-title">全部账号 <span class="muted">（{{ users|length }} 个）</span></h2>
   <div class="table-scroll">
-    <table class="table">
+    <table class="table table-cards">
       <thead>
         <tr>
           <th>姓名</th><th>账号</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th>
@@ -45,12 +45,12 @@
       <tbody>
       {% for u in users %}
         <tr class="{% if not u.is_active %}row-off{% endif %}">
-          <td>{{ u.display_name }}</td>
-          <td class="mono">{{ u.username }}</td>
-          <td><span class="badge role-{{ u.role }}">{{ u.role_label }}</span></td>
-          <td>{% if u.is_active %}<span class="tag tag-on">启用</span>{% else %}<span class="tag tag-off">已停用</span>{% endif %}</td>
-          <td class="muted">{{ u.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-          <td class="ops">
+          <td class="cell-primary">{{ u.display_name }}</td>
+          <td class="mono" data-label="账号">{{ u.username }}</td>
+          <td data-label="角色"><span class="badge role-{{ u.role }}">{{ u.role_label }}</span></td>
+          <td data-label="状态">{% if u.is_active %}<span class="tag tag-on">启用</span>{% else %}<span class="tag tag-off">已停用</span>{% endif %}</td>
+          <td class="muted" data-label="创建时间">{{ u.created_at | dt }}</td>
+          <td class="ops" data-label="操作">
             <form method="post" action="/admin/users/{{ u.id }}/toggle" class="inline-form">
               <button type="submit" class="btn btn-small">{% if u.is_active %}停用{% else %}启用{% endif %}</button>
             </form>

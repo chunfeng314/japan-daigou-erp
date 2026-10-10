@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from .models import Order, StatusLog
 from .state_machine import MAIN_FLOW, Status
+from .timeutil import utcnow_naive  # noqa: F401  重新导出，调用方习惯从 sla 拿
 
 #: 各状态「合理停留」天数。终态不检测。
 DEFAULT_SLA_DAYS: dict[Status, int] = {
@@ -54,11 +55,6 @@ SLA_DAYS: dict[Status, int] = _load_sla()
 
 def sla_days(status: Status) -> int | None:
     return SLA_DAYS.get(status)
-
-
-def utcnow_naive() -> datetime:
-    """库里存的是 naive UTC（SQLite 不保存时区），比较时必须同口径。"""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _as_naive_utc(value: datetime | None) -> datetime | None:
