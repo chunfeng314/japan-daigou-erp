@@ -18,10 +18,10 @@ from typing import Any, Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import Order, User
+from ..models import Order, OrderException, Purchase, User
 from ..permissions import visibility_filter
 from ..sla import stay_map
-from ..state_machine import Status, next_step
+from ..state_machine import ExceptionStatus, Status, next_step
 from ..todo_service import overdue_for_user, todos_for
 
 MAX_LIMIT = 50
@@ -102,16 +102,17 @@ def _describe(order: Order, stay) -> dict:
 
 
 def _one_line(info: dict) -> str:
-    parts = [f"{info['order_no']}（{info['status']}）", info["product"]]
+    """列表里的一行。**要短** —— 一屏塞下十行不刷屏，模型才不会被原始数据淹没。"""
+    parts = [info["order_no"], info["status"], info["product"]]
     if info["overdue"]:
-        parts.append(f"⚠️ 已超时：{info['stay_label']}")
+        parts.append(f"⚠️ {info['stay_label']}")
     elif info["stay_days"] is not None:
-        parts.append(f"停留 {info['stay_label']}")
+        parts.append(f"停留 {info['stay_days']} 天")
     if info["has_exception"]:
-        parts.append("有未了结异常")
+        parts.append("有异常")
     if info["next_roles"]:
-        parts.append("下一步轮到：" + "、".join(info["next_roles"]))
-    return "，".join(parts)
+        parts.append("等" + "、".join(info["next_roles"]))
+    return "｜".join(parts)
 
 
 # --------------------------------------------------------------------------- #
@@ -135,7 +136,9 @@ def _tool_find_order(ctx: AgentContext, order_no: str) -> ToolResult:
     info = _describe(matched, stay_map(ctx.db, [matched]).get(matched.id))
     lines = [_one_line(info)]
     if info["next_status"]:
-        lines.append(f"下一步：推进到「{info['next_status']}」，由「{'、'.join(info['next_roles'])}」操作。")
+        lines.append(
+            f"下一步：推进到「{info['next_status']}」，由「{'、'.join(info['next_roles'])}」操作。"
+        )
     else:
         lines.append("这单已经结束，没有下一步。")
     return ToolResult(True, "\n".join(lines), data=info, citations=(info["order_no"],))
@@ -159,6 +162,11 @@ def _tool_list_orders(
     stays = stay_map(ctx.db, orders)
     if only_overdue:
         orders = [o for o in orders if stays[o.id].overdue]
+        # 按「超期严重程度」排，而不是「停留了几天」——
+        # 超 2 天/限 3 天的单，比超 1 天/限 14 天的单更该先处理。
+        orders.sort(
+            key=lambda o: (stays[o.id].days or 0) - (stays[o.id].limit or 0), reverse=True
+        )
 
     total = len(orders)
     shown = orders[:limit]
@@ -203,7 +211,9 @@ def _tool_overdue_orders(ctx: AgentContext, limit: int = 10) -> ToolResult:
     result = _tool_list_orders(ctx, only_overdue=True, limit=limit)
     return ToolResult(
         result.ok,
-        f"有 {count} 单超时：\n{result.summary}",
+        f"有 {count} 单超时。\n"
+        f"排序已按「超期天数」（停留天数 − 该状态上限，越多越靠前）排好，"
+        f"请按这个顺序回答，不要自己重排：\n{result.summary}",
         data=result.data,
         citations=result.citations,
     )
@@ -242,6 +252,131 @@ def _tool_order_progress(ctx: AgentContext, order_no: str) -> ToolResult:
         data={**base.data, "registered_stages": marks},
         citations=base.citations,
     )
+
+
+def _tool_list_exceptions(ctx: AgentContext, limit: int = 10) -> ToolResult:
+    """列出未了结的异常。
+
+    补这个工具的原因：`my_todos` 只给"异常未了结 N 单"这个**数字**，
+    模型想告诉老板"是哪一单"却查不到 —— 只能一遍遍 find_order 碰运气。
+    """
+    limit = max(1, min(int(limit or 10), MAX_LIMIT))
+    stmt = (
+        select(OrderException, Order)
+        .join(Order, Order.id == OrderException.order_id)
+        .where(OrderException.ex_status != ExceptionStatus.RESOLVED.value)
+        .order_by(OrderException.id.desc())
+    )
+    visibility = visibility_filter(ctx.user)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+
+    rows = list(ctx.db.execute(stmt).all())
+    if not rows:
+        return ToolResult(True, "没有未了结的异常。", data=[])
+
+    infos = [
+        {
+            "order_no": order.order_no,
+            "status": order.status,
+            "type": exception.exception_type,
+            "qty": exception.qty_affected,
+            "found_stage": exception.found_stage,
+            "detail": exception.detail,
+            "ex_status": exception.ex_status,
+        }
+        for exception, order in rows[:limit]
+    ]
+    body = "\n".join(
+        f"{i['order_no']}｜{i['status']}｜{i['type']}"
+        + (f" {i['qty']} 件" if i["qty"] else "")
+        + f"｜发现在「{i['found_stage'] or '未记录'}」｜{i['detail'] or '无描述'}"
+        for i in infos
+    )
+    tail = (
+        f"（共 {len(rows)} 条）"
+        if len(rows) <= limit
+        else f"（共 {len(rows)} 条，先列 {len(infos)} 条）"
+    )
+    return ToolResult(
+        True,
+        f"未了结的异常：\n{body}\n{tail}",
+        data=infos,
+        citations=tuple(i["order_no"] for i in infos),
+    )
+
+
+def _tool_purchase_cost_summary(ctx: AgentContext) -> ToolResult:
+    """采购成本汇总 —— **按币种分别统计**。
+
+    铁律（开发文档 §2.4）：金额分币种各记各的，**不自动换汇、不算利润**。
+    所以这里只给分币种的小计，**不给"利润"**——利润要人来判断。
+    """
+    stmt = select(Purchase, Order).join(Order, Order.id == Purchase.order_id)
+    visibility = visibility_filter(ctx.user)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+
+    buckets: dict[str, list[float]] = {}
+    missing = 0
+    for purchase, _order in ctx.db.execute(stmt).all():
+        if purchase.purchase_price is None:
+            missing += 1
+            continue
+        buckets.setdefault(purchase.purchase_currency or "未标注", []).append(
+            float(purchase.purchase_price)
+        )
+
+    if not buckets:
+        note = f"（{missing} 单已采购但没填成本）" if missing else ""
+        return ToolResult(True, f"可见范围内还没有登记采购成本的订单{note}。", data={})
+
+    lines = ["采购成本合计（按币种分别统计；系统不自动换汇、不计算利润）："]
+    data: dict[str, dict] = {}
+    for currency, prices in sorted(buckets.items()):
+        total = sum(prices)
+        lines.append(
+            f"- {currency}：{len(prices)} 单，合计 {total:,.2f}"
+            f"（单均 {total / len(prices):,.2f}）"
+        )
+        data[currency] = {"orders": len(prices), "total": round(total, 2)}
+    if missing:
+        lines.append(f"另有 {missing} 单已采购但没填采购成本，未计入。")
+    return ToolResult(True, "\n".join(lines), data=data)
+
+
+#: 算"卖出去了吗"的状态：货已经发出去了
+_SOLD_STATUSES = (Status.SHIPPED, Status.WAITING_SETTLEMENT, Status.COMPLETED)
+
+
+def _tool_sales_summary(ctx: AgentContext) -> ToolResult:
+    """销售额汇总 —— 按币种，只统计**货已发出**的单。
+
+    同样受铁律约束：**不换汇、不算利润**。只给销售金额的分币种小计。
+    """
+    stmt = _visible_orders_stmt(ctx).where(Order.status.in_([s.value for s in _SOLD_STATUSES]))
+    orders = list(ctx.db.scalars(stmt).all())
+    if not orders:
+        return ToolResult(True, "可见范围内还没有已发货的订单。", data={})
+
+    by_currency: dict[str, float] = {}
+    by_status: dict[str, int] = {}
+    for order in orders:
+        by_currency[order.sale_currency] = by_currency.get(order.sale_currency, 0.0) + float(
+            order.sale_amount or 0
+        )
+        by_status[order.status] = by_status.get(order.status, 0) + 1
+
+    lines = [f"销售金额合计（只算已发货及之后的状态，按币种分别统计）："]
+    data: dict[str, dict] = {}
+    for currency, total in sorted(by_currency.items()):
+        lines.append(f"- {currency}：合计 {total:,.0f}")
+        data[currency] = {"total": round(total, 2)}
+    lines.append(
+        "按状态：" + "、".join(f"{name} {count} 单" for name, count in sorted(by_status.items()))
+    )
+    lines.append("（系统不换汇、不计算利润，这里只有销售额本身。）")
+    return ToolResult(True, "\n".join(lines), data=data)
 
 
 TOOLS: dict[str, ToolSpec] = {
@@ -297,12 +432,33 @@ TOOLS: dict[str, ToolSpec] = {
         ),
         ToolSpec(
             name="overdue_orders",
-            description="列出停留时间超出该状态合理天数的订单（卡单）。",
+            description="列出停留时间超出该状态合理天数的订单（卡单），按超期严重程度排序。",
             parameters={
                 "type": "object",
                 "properties": {"limit": {"type": "integer"}},
             },
             handler=_tool_overdue_orders,
+        ),
+        ToolSpec(
+            name="list_exceptions",
+            description="列出未了结的少货/错货/破损异常：是哪一单、什么类型、在哪个环节发现的。",
+            parameters={
+                "type": "object",
+                "properties": {"limit": {"type": "integer"}},
+            },
+            handler=_tool_list_exceptions,
+        ),
+        ToolSpec(
+            name="purchase_cost_summary",
+            description="按币种分别汇总采购成本。**不换汇、不算利润**（文档铁律）。",
+            parameters={"type": "object", "properties": {}},
+            handler=_tool_purchase_cost_summary,
+        ),
+        ToolSpec(
+            name="sales_summary",
+            description="按币种汇总销售金额（只算已发货及之后的状态）。回答「卖得怎么样」用这个。",
+            parameters={"type": "object", "properties": {}},
+            handler=_tool_sales_summary,
         ),
     )
 }
@@ -343,3 +499,7 @@ def run_tool(ctx: AgentContext, name: str, arguments: dict | None = None) -> Too
         return spec.handler(ctx, **arguments)
     except TypeError as exc:
         return ToolResult(False, f"{name} 参数不对：{exc}", error="bad_params")
+    except Exception as exc:  # noqa: BLE001
+        # ⚠️ 工具层必须有兜底：某个工具抛异常不该把整个助手页打成 500。
+        #    这里如实告诉模型"这个能力出错了"，它会转述成人话，而不是整页崩掉。
+        return ToolResult(False, f"{name} 执行出错（{type(exc).__name__}）", error="tool_crash")

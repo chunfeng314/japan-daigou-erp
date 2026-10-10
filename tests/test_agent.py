@@ -14,6 +14,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from dataclasses import replace
+
 from app import config
 from app.db import get_sessionmaker, init_db, reset_state
 from app.storage import reset_storage
@@ -29,7 +31,7 @@ config.LLM_MODEL = ""
 reset_state()
 init_db()
 
-from app.agent import ScriptedLLM, ask, is_configured, reset_client, run_tool  # noqa: E402
+from app.agent import TOOLS, ScriptedLLM, ask, is_configured, reset_client, run_tool  # noqa: E402
 from app.agent.llm import LLMReply, ToolCall  # noqa: E402
 from app.agent.tools import AgentContext  # noqa: E402
 from app.main import app  # noqa: E402
@@ -213,6 +215,171 @@ class TestToolPermissions(AgentTestCase):
 
         for name, spec in TOOLS.items():
             self.assertTrue(spec.read_only, f"{name} 竟然是写操作？")
+
+    # ---------- 三个新工具（补能力缺口用的） ----------
+    def _purchase(self, order_id: int, price: float | None, currency: str = "CNY"):
+        from app.models import Purchase
+
+        session = _session()
+        try:
+            session.add(
+                Purchase(
+                    order_id=order_id,
+                    purchaser_id=self.buyer_id,
+                    purchase_price=price,
+                    purchase_currency=currency,
+                    source_platform="淘宝",
+                    domestic_tracking_no="SF123",
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+
+    def _backdate(self, order_id: int, days: int) -> None:
+        """把该单最后一条流转记录的时间往前拨，用来制造"停留了 N 天"。"""
+        from datetime import timedelta
+
+        from sqlalchemy import select as sa_select
+
+        from app.models import StatusLog as _StatusLog
+        from app.sla import utcnow_naive
+
+        session = _session()
+        try:
+            log = session.scalars(
+                sa_select(_StatusLog)
+                .where(_StatusLog.order_id == order_id)
+                .order_by(_StatusLog.id)
+            ).all()[-1]
+            log.created_at = utcnow_naive() - timedelta(days=days)
+            session.commit()
+        finally:
+            session.close()
+
+    def _exception(self, order_id: int, status: str = "待处理"):
+        from app.models import OrderException
+
+        session = _session()
+        try:
+            session.add(
+                OrderException(
+                    order_id=order_id,
+                    exception_type="少货",
+                    found_stage="已发货",
+                    qty_affected=1,
+                    detail="买家反馈少了一件",
+                    ex_status=status,
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+
+    def test_list_exceptions_points_at_the_order(self):
+        """"异常未了结 N 单"只是个数字，模型得能查到**是哪一单**。"""
+        order = self.make_order(self.sales_a, desc="甲的单")
+        self._exception(order.id)
+        ctx = self.ctx_for(self.sales_a)
+        result = run_tool(ctx, "list_exceptions", {})
+        self.assertTrue(result.ok)
+        self.assertIn(order.order_no, result.summary)
+        self.assertIn("少货", result.summary)
+        self.assertEqual(result.citations, (order.order_no,))
+
+    def test_list_exceptions_respects_visibility(self):
+        order = self.make_order(self.sales_a, desc="甲的单")
+        self._exception(order.id)
+        ctx = self.ctx_for(self.sales_b)
+        result = run_tool(ctx, "list_exceptions", {})
+        self.assertTrue(result.ok)
+        self.assertNotIn(order.order_no, result.summary)
+        self.assertIn("没有未了结的异常", result.summary)
+
+    def test_list_exceptions_excludes_resolved(self):
+        order = self.make_order(self.sales_a, desc="甲的单")
+        self._exception(order.id, status="已解决")
+        ctx = self.ctx_for(self.sales_a)
+        self.assertIn("没有未了结", run_tool(ctx, "list_exceptions", {}).summary)
+
+    def test_purchase_cost_summary_is_split_by_currency(self):
+        a = self.make_order(self.sales_a, desc="甲1", amount=100.0)
+        b = self.make_order(self.sales_a, desc="甲2", amount=200.0)
+        self._purchase(a.id, 50.0, "CNY")
+        self._purchase(b.id, 3000.0, "JPY")
+        ctx = self.ctx_for(self.sales_a)
+        text = run_tool(ctx, "purchase_cost_summary", {}).summary
+        self.assertIn("CNY", text)
+        self.assertIn("50.00", text)
+        self.assertIn("JPY", text)
+        self.assertIn("3,000.00", text)
+        # 铁律：不换汇、不算利润 —— 不该出现任何"利润"数字
+        self.assertNotIn("利润：", text)
+
+    def test_purchase_cost_skips_missing_price(self):
+        order = self.make_order(self.sales_a, desc="甲的单")
+        self._purchase(order.id, None)
+        ctx = self.ctx_for(self.sales_a)
+        text = run_tool(ctx, "purchase_cost_summary", {}).summary
+        self.assertIn("没填", text)
+
+    def test_purchase_cost_respects_visibility(self):
+        order = self.make_order(self.sales_b, desc="乙的单")
+        self._purchase(order.id, 999.0)
+        ctx = self.ctx_for(self.sales_a)
+        text = run_tool(ctx, "purchase_cost_summary", {}).summary
+        self.assertNotIn("999", text)
+
+    def test_purchase_cost_empty(self):
+        ctx = self.ctx_for(self.sales_a)
+        self.assertIn("还没有登记", run_tool(ctx, "purchase_cost_summary", {}).summary)
+
+    def test_sales_summary_only_counts_shipped_and_later(self):
+        self.make_order(self.sales_a, desc="还在采购", amount=9999.0, status=Status.PURCHASING)
+        shipped = self.make_order(self.sales_a, desc="已发货", amount=6900.0, status=Status.SHIPPED)
+        self.make_order(self.sales_a, desc="已完成", amount=9800.0, status=Status.COMPLETED)
+
+        ctx = self.ctx_for(self.sales_a)
+        result = run_tool(ctx, "sales_summary", {})
+        self.assertTrue(result.ok)
+        self.assertIn("16,700", result.summary)   # 6900 + 9800
+        self.assertNotIn("9,999", result.summary)  # 采购中的不算
+        self.assertEqual(result.data["JPY"]["total"], 16700.0)
+        self.assertNotIn("利润：", result.summary)
+
+    def test_sales_summary_respects_visibility(self):
+        self.make_order(self.sales_b, desc="乙的单", amount=5000.0, status=Status.SHIPPED)
+        ctx = self.ctx_for(self.sales_a)
+        self.assertNotIn("5,000", run_tool(ctx, "sales_summary", {}).summary)
+
+    def test_tool_crash_is_contained(self):
+        """工具抛异常不能把整个助手页打成 500 —— 要变成一条能转述的错误。"""
+        ctx = self.ctx_for(self.admin_id)
+        original = TOOLS["list_orders"].handler
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("数据库炸了")
+
+        TOOLS["list_orders"] = replace(TOOLS["list_orders"], handler=boom)
+        try:
+            result = run_tool(ctx, "list_orders", {})
+            self.assertFalse(result.ok)
+            self.assertEqual(result.error, "tool_crash")
+            self.assertNotIn("数据库炸了", result.summary, "不该把内部异常原文透给模型")
+        finally:
+            TOOLS["list_orders"] = replace(TOOLS["list_orders"], handler=original)
+
+    def test_overdue_sorted_by_severity_not_absolute_days(self):
+        """"超 2 天/限 3 天"比"超 1 天/限 14 天"更该先处理。"""
+        severe = self.make_order(self.sales_a, desc="严重", status=Status.PURCHASING)
+        mild = self.make_order(self.sales_a, desc="轻微", status=Status.SHIPPED)
+        self._backdate(severe.id, 6)   # 停留 6 天 / 限 3 天 → 超期 3 天
+        self._backdate(mild.id, 16)    # 停留 16 天 / 限 14 天 → 超期 2 天
+        ctx = self.ctx_for(self.sales_a)
+        text = run_tool(ctx, "overdue_orders", {}).summary
+        self.assertLess(text.index(severe.order_no), text.index(mild.order_no),
+                        "应按超期天数排，而不是停留绝对天数")
+        self.assertIn("超期天数", text, "要说明排序依据，否则模型会自己重排")
 
 
 # --------------------------------------------------------------------------- #
